@@ -22,28 +22,16 @@ function isApiError(error: unknown): error is { response: { data: APIError } } {
 
 export class APIService {
     static async uploadLecture(
-        videoFile: File | null,
-        presentationFile: File,
-        videoUrl?: string
+        formData: FormData
     ): Promise<UploadResponse> {
         try {
-            const formData = new FormData();
-            if (videoFile) {
-                formData.append('file', videoFile);
-            } else if (videoUrl) {
-                formData.append('video_url', videoUrl);
-            }
-
             const response = await api.post<UploadResponse>('/transcribe/', formData, {
                 headers: {
                     'Content-Type': 'multipart/form-data',
                 },
             });
 
-            return {
-                lecture_id: response.data.lecture_id,
-                message: response.data.message
-            };
+            return response.data;
         } catch (error: unknown) {
             if (isApiError(error)) {
                 throw error.response.data;
@@ -53,37 +41,27 @@ export class APIService {
     }
 
     static async getLecture(id: string): Promise<Lecture> {
-      try {
-          const response = await api.get<any>(`/lectures/${id}/transcription`);
-          console.log('Backend response:', response.data); // Add this for debugging
-              
-          // Transform the FastAPI response to match our frontend types
-          const transformedData: Lecture = {
-              lecture_id: parseInt(id),
-              title: response.data.title || `Lecture ${id}`,
-              status: response.data.status || 'completed',
-              slides: [
-                  {
-                      imageUrl: '/placeholder-slide.png'
-                  }
-              ],
-              transcription: response.data.transcription.map((segment: any) => ({
-                  id: segment.id.toString(),
-                  startTime: segment.startTime,
-                  endTime: segment.endTime,
-                  text: segment.text,
-                  confidence: segment.confidence,
-              })),
-          };
-  
-          console.log('Transformed data:', transformedData); // Add this for debugging
-          return transformedData;
-      } catch (error: unknown) {
-          if (isApiError(error)) {
-              throw error.response.data;
-          }
-          console.error('Error details:', error); // Add this for debugging
-          throw new Error('An unexpected error occurred');
-      }
-  }
+        try {
+            const response = await api.get<any>(`/lectures/${id}/transcription`);
+            
+            return {
+                lecture_id: parseInt(id),
+                title: response.data.title || `Lecture ${id}`,
+                status: response.data.status || 'completed',
+                slides: response.data.slides || [],
+                transcription: response.data.transcription.map((segment: any) => ({
+                    id: segment.id.toString(),
+                    startTime: segment.startTime,
+                    endTime: segment.endTime,
+                    text: segment.text,
+                    confidence: segment.confidence,
+                })),
+            };
+        } catch (error: unknown) {
+            if (isApiError(error)) {
+                throw error.response.data;
+            }
+            throw new Error('An unexpected error occurred');
+        }
+    }
 }

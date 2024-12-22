@@ -1,5 +1,5 @@
 // src/pages/UploadPage.tsx
-import { useState, ChangeEvent, FormEvent } from 'react';
+import React, { useState, ChangeEvent, FormEvent } from 'react';
 import { Upload, FileType, Video } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { APIService } from '../services/api';
@@ -23,9 +23,15 @@ export const UploadPage: React.FC = () => {
 
   const handlePresentationFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (file && (file.type.includes('presentation') || file.type.includes('pdf'))) {
+    if (file && (
+      file.type === 'application/vnd.openxmlformats-officedocument.presentationml.presentation' || 
+      file.type === 'application/vnd.ms-powerpoint' ||
+      file.type === 'application/pdf'
+    )) {
       setPresentationFile(file);
       setError('');
+    } else {
+      setError('Please upload a valid presentation file (PPT, PPTX, or PDF)');
     }
   };
 
@@ -44,8 +50,17 @@ export const UploadPage: React.FC = () => {
         throw new Error('Please provide both video and presentation files');
       }
 
-      const response = await APIService.uploadLecture(videoFile, presentationFile, videoUrl);
-      // Redirect to the lecture view page
+      // Create FormData and append both files
+      const formData = new FormData();
+      if (videoFile) {
+        formData.append('video', videoFile);
+      }
+      if (videoUrl) {
+        formData.append('video_url', videoUrl);
+      }
+      formData.append('presentation', presentationFile);
+
+      const response = await APIService.uploadLecture(formData);
       navigate(`/lecture/${response.lecture_id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Upload failed');
@@ -55,9 +70,15 @@ export const UploadPage: React.FC = () => {
   };
 
   return (
-    <div className="max-w-3xl mx-auto">
+    <div className="max-w-3xl mx-auto p-4">
       <div className="bg-white shadow sm:rounded-lg p-6">
         <h2 className="text-2xl font-bold mb-6">Upload Your Lecture</h2>
+        
+        {error && (
+          <div className="mb-4 p-3 bg-red-50 text-red-700 rounded-md">
+            {error}
+          </div>
+        )}
         
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="space-y-4">

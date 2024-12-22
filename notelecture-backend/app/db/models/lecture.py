@@ -8,7 +8,12 @@ class Lecture(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String(255))
-    status = Column(String(50))  # e.g., "completed", "processing", "failed"
+    status = Column(String(50))
+    video_path = Column(String(255))
+    
+    # Add presentation_path
+    presentation_path = Column(String(255))
     
     # Relationships
     transcription_segments = relationship("TranscriptionSegment", back_populates="lecture")
+    slides = relationship("Slide", back_populates="lecture") 

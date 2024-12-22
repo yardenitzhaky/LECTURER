@@ -13,6 +13,8 @@ class TranscriptionSegment(Base):
     end_time = Column(Float)
     text = Column(String(1000))
     confidence = Column(Float)
+    slide_id = Column(Integer, ForeignKey("slides.id"), nullable=True)
 
     # Relationship
     lecture = relationship("Lecture", back_populates="transcription_segments")
+    slide = relationship("Slide", back_populates="segments")
