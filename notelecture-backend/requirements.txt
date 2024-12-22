@@ -1,0 +1,34 @@
+# Core FastAPI dependencies
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+python-multipart==0.0.9
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+
+# Database
+SQLAlchemy==2.0.25
+alembic==1.13.1
+PyMySQL==1.1.1
+
+# AI and Processing
+faster-whisper==0.10.0
+torch==2.1.2
+torchaudio==2.1.2
+transformers==4.38.0
+moviepy==1.0.3
+numpy==1.25.0
+Pillow==10.4.0
+ffmpeg-python==0.2.0
+
+# File Handling
+python-pptx==0.6.21
+aiofiles==23.2.1
+
+# Utilities
+python-dotenv==1.0.0
+tqdm==4.67.1
+
+# Testing
+pytest>=8.2.0
+pytest-asyncio==0.25.0
+httpx==0.28.1

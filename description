@@ -34,8 +34,7 @@ Edit/export capabilities
 Technology Stack:
 
 Frontend: React.js + TypeScript
-Backend: Node.js/Express
-Database: MySQL
+Backend: Python
 AI Services: OpenAI Whisper for transcription (additional AI services may be needed)
 File Processing: FFmpeg, python-pptx (additional processing tools may be needed)
 

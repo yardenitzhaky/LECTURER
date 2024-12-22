@@ -1,4 +1,3 @@
-// src/services/api.ts
 import axios from 'axios';
 import type { Lecture, UploadResponse, APIError } from '../types';
 
@@ -29,7 +28,6 @@ export class APIService {
   ): Promise<UploadResponse> {
     try {
       const formData = new FormData();
-      
       if (videoFile) {
         formData.append('video', videoFile);
       } else if (videoUrl) {
@@ -57,29 +55,6 @@ export class APIService {
     try {
       const response = await api.get<Lecture>(`/lectures/${id}`);
       return response.data;
-    } catch (error: unknown) {
-      if (isApiError(error)) {
-        throw error.response.data;
-      }
-      throw new Error('An unexpected error occurred');
-    }
-  }
-
-  static async getLectures(): Promise<Lecture[]> {
-    try {
-      const response = await api.get<Lecture[]>('/lectures');
-      return response.data;
-    } catch (error: unknown) {
-      if (isApiError(error)) {
-        throw error.response.data;
-      }
-      throw new Error('An unexpected error occurred');
-    }
-  }
-
-  static async deleteLecture(id: string): Promise<void> {
-    try {
-      await api.delete(`/lectures/${id}`);
     } catch (error: unknown) {
       if (isApiError(error)) {
         throw error.response.data;
