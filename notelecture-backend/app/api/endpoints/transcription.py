@@ -4,10 +4,14 @@ from sqlalchemy.orm import Session
 from fastapi import Depends
 from typing import Dict, Any
 import os
+from pathlib import Path
 import aiofiles
 from app.services.transcription import TranscriptionService
-from app.db import models
+from app.db.models import Lecture, TranscriptionSegment
 from app.api import deps
+import logging
+logger = logging.getLogger(__name__)
+
 
 router = APIRouter()
 transcription_service = TranscriptionService()
@@ -40,7 +44,7 @@ async def transcribe_lecture(
         transcription = await transcription_service.transcribe(audio_path)
 
         # Store in database
-        lecture = models.Lecture(
+        lecture = Lecture(
             title=file.filename,
             status="completed"
         )
@@ -49,7 +53,7 @@ async def transcribe_lecture(
 
         # Add transcription segments
         for segment in transcription["segments"]:
-            db_segment = models.TranscriptionSegment(
+            db_segment = TranscriptionSegment(
                 lecture_id=lecture.id,
                 start_time=segment["start_time"],
                 end_time=segment["end_time"],
@@ -58,17 +62,6 @@ async def transcribe_lecture(
             )
             db.add(db_segment)
             db.flush()
-
-            # Add words
-            for word in segment["words"]:
-                db_word = models.Word(
-                    segment_id=db_segment.id,
-                    text=word["text"],
-                    start_time=word["start_time"],
-                    end_time=word["end_time"],
-                    confidence=word["confidence"]
-                )
-                db.add(db_word)
 
         db.commit()
 
@@ -88,6 +81,7 @@ async def transcribe_lecture(
             detail=f"Error processing video: {str(e)}"
         )
 
+# app/api/endpoints/transcription.py
 @router.get("/lectures/{lecture_id}/transcription")
 async def get_lecture_transcription(
     lecture_id: int,
@@ -97,43 +91,40 @@ async def get_lecture_transcription(
     Retrieve the transcription for a specific lecture.
     """
     try:
+        # Get lecture info first
+        lecture = db.query(Lecture).filter(Lecture.id == lecture_id).first()
+        if not lecture:
+            raise HTTPException(status_code=404, detail="Lecture not found")
+
         # Get all segments for the lecture
-        segments = db.query(models.TranscriptionSegment)\
-            .filter(models.TranscriptionSegment.lecture_id == lecture_id)\
+        segments = db.query(TranscriptionSegment)\
+            .filter(TranscriptionSegment.lecture_id == lecture_id)\
             .all()
 
         if not segments:
             raise HTTPException(status_code=404, detail="Transcription not found")
 
-        # Get words for each segment
+        # Match the frontend expected format
         result = []
         for segment in segments:
-            words = db.query(models.Word)\
-                .filter(models.Word.segment_id == segment.id)\
-                .all()
-
             result.append({
-                "start_time": segment.start_time,
-                "end_time": segment.end_time,
+                "id": segment.id,
+                "startTime": segment.start_time,
+                "endTime": segment.end_time,
                 "text": segment.text,
-                "confidence": segment.confidence,
-                "words": [
-                    {
-                        "text": word.text,
-                        "start_time": word.start_time,
-                        "end_time": word.end_time,
-                        "confidence": word.confidence
-                    }
-                    for word in words
-                ]
+                "confidence": segment.confidence
             })
 
         return {
             "lecture_id": lecture_id,
-            "segments": result
+            "title": lecture.title,
+            "status": lecture.status,
+            "transcription": result,
+            "slides": []  # Empty array for now
         }
 
     except Exception as e:
+        logger.error(f"Error retrieving transcription: {str(e)}")  # Add logging
         raise HTTPException(
             status_code=500,
             detail=f"Error retrieving transcription: {str(e)}"

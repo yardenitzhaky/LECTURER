@@ -1,3 +1,4 @@
+# app/services/transcription.py
 import os
 from pathlib import Path
 from faster_whisper import WhisperModel
@@ -5,6 +6,8 @@ import torch
 import moviepy.editor as mp  # Changed import
 from typing import List, Dict, Any
 import logging
+from uuid import uuid4
+
 
 logger = logging.getLogger(__name__)
 
@@ -36,43 +39,30 @@ class TranscriptionService:
 
     async def transcribe(self, audio_path: str) -> Dict[str, Any]:
         """
-        Transcribe audio file and return detailed transcription with word-level timing.
+        Transcribe audio file and return detailed transcription with segment-level timing.
         """
         try:
-            # Transcribe with word-level timestamps
+            # Transcribe without word timestamps
             segments, info = self.model.transcribe(
                 audio_path,
-                word_timestamps=True
+                word_timestamps=False  # Changed to False since we don't need word timestamps
             )
             
-            # Process segments and words
+            # Process segments
             processed_segments = []
             full_text = []
             
             for segment in segments:
-                words = []
-                segment_confidence = []  # Initialize list to collect word confidences
-                for word in segment.words:
-                    words.append({
-                        "text": word.word.strip(),
-                        "start_time": word.start,
-                        "end_time": word.end,
-                        "confidence": word.probability  # Use word.probability for confidence
-                    })
-                    segment_confidence.append(word.probability)  # Collect word confidences
-                
-                # Calculate average confidence for the segment
-                avg_segment_confidence = sum(segment_confidence) / len(segment_confidence) if segment_confidence else 0
-                
                 processed_segments.append({
+                    "id": str(len(processed_segments) + 1), 
                     "start_time": segment.start,
                     "end_time": segment.end,
                     "text": segment.text.strip(),
-                    "words": words,
-                    "confidence": avg_segment_confidence  # Use average confidence for segment
+                    "confidence": segment.avg_logprob  # Use segment-level confidence
                 })
                 full_text.append(segment.text)
             
+            logger.info(f"Processed {len(processed_segments)} segments")
             return {
                 "segments": processed_segments,
                 "language": info.language,

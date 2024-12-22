@@ -1,18 +1,23 @@
 // src/pages/UploadPage.tsx
 import { useState, ChangeEvent, FormEvent } from 'react';
 import { Upload, FileType, Video } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { APIService } from '../services/api';
 
 export const UploadPage: React.FC = () => {
+  const navigate = useNavigate();
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [presentationFile, setPresentationFile] = useState<File | null>(null);
   const [videoUrl, setVideoUrl] = useState<string>('');
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
+  const [error, setError] = useState<string>('');
 
   const handleVideoFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file && file.type.startsWith('video/')) {
       setVideoFile(file);
       setVideoUrl('');
+      setError('');
     }
   };
 
@@ -20,6 +25,7 @@ export const UploadPage: React.FC = () => {
     const file = event.target.files?.[0];
     if (file && (file.type.includes('presentation') || file.type.includes('pdf'))) {
       setPresentationFile(file);
+      setError('');
     }
   };
 
@@ -31,11 +37,18 @@ export const UploadPage: React.FC = () => {
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setIsProcessing(true);
+    setError('');
     
     try {
-      // TODO: Implement file upload logic
-    } catch (error) {
-      console.error('Upload failed:', error);
+      if (!presentationFile || (!videoFile && !videoUrl)) {
+        throw new Error('Please provide both video and presentation files');
+      }
+
+      const response = await APIService.uploadLecture(videoFile, presentationFile, videoUrl);
+      // Redirect to the lecture view page
+      navigate(`/lecture/${response.lecture_id}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Upload failed');
     } finally {
       setIsProcessing(false);
     }

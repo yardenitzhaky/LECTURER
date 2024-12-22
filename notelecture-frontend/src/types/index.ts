@@ -1,42 +1,29 @@
 // src/types/index.ts
+export interface TranscriptionSegment {
+  id: string;
+  startTime: number;
+  endTime: number;
+  text: string;
+  confidence: number;
+}
+
+export interface Slide {
+  imageUrl: string;
+}
 
 export interface Lecture {
-    id: string;
-    title: string;
-    videoUrl: string;
-    videoType: 'file' | 'url';
-    presentationUrl: string;
-    createdAt: string;
-    status: 'processing' | 'completed' | 'error';
-    slides: Slide[];
-    transcription: TranscriptionSegment[];
-  }
-  
-  export interface Slide {
-    id: string;
-    imageUrl: string;
-    pageNumber: number;
-    timestamp: number;
-    notes: string[];
-  }
-  
-  export interface TranscriptionSegment {
-    id: string;
-    startTime: number;
-    endTime: number;
-    text: string;
-    slideId: string;
-    confidence: number;
-  }
-  
-  export interface UploadResponse {
-    lectureId: string;
-    status: 'processing';
-    estimatedTime: number;
-  }
-  
-  export interface APIError {
-    code: string;
-    message: string;
-    details?: Record<string, unknown>;
-  }
+  lecture_id: number;  // Changed from id to match backend
+  title: string;
+  status: string;
+  slides: Slide[];     // Simplified slides interface
+  transcription: TranscriptionSegment[];
+}
+
+export interface UploadResponse {
+  lecture_id: number;  // Changed from lectureId to match backend
+  message: string;
+}
+
+export interface APIError {
+  detail: string;
+}

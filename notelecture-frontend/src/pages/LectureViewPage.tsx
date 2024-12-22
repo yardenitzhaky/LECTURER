@@ -1,79 +1,68 @@
 // src/pages/LectureViewPage.tsx
-import { useState } from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
+import { APIService } from '../services/api';
+import { Lecture, TranscriptionSegment } from '../types/index.ts';
+import { formatTime } from '../utils/format';
 
 export const LectureViewPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
-  const [currentSlide, setCurrentSlide] = useState<number>(0);
-  const [isFullscreenVideo, setIsFullscreenVideo] = useState<boolean>(false);
+  const [lecture, setLecture] = useState<Lecture | null>(null);
+
+  useEffect(() => {
+    const fetchLecture = async () => {
+      if (!id) return;
+      try {
+        const lectureData = await APIService.getLecture(id);
+        setLecture(lectureData);
+      } catch (error) {
+        console.error('Error fetching lecture:', error);
+      }
+    };
+
+    fetchLecture();
+  }, [id]);
 
   return (
-    <div className="h-screen flex flex-col">
-      {/* Top Section: Video and Slides */}
-      <div className={`flex flex-1 ${isFullscreenVideo ? 'flex-col' : 'flex-row'}`}>
-        {/* Video Player */}
-        <div className={`${isFullscreenVideo ? 'h-3/4' : 'w-1/2'} bg-black p-4`}>
-          <div className="w-full h-full flex items-center justify-center">
-            <div className="aspect-video bg-gray-800 w-full">
-              {/* Video player component will go here */}
-              <div className="w-full h-full flex items-center justify-center text-white">
-                Video Player - Lecture ID: {id}
-              </div>
+    <div className="min-h-screen flex flex-col">
+        {/* Presentation Section */}
+        <div className="flex-1 bg-gray-100 p-4">
+            <div className="max-w-4xl mx-auto bg-white rounded-lg shadow-sm p-4">
+                {lecture?.slides[0]?.imageUrl ? (
+                    <img 
+                        src={lecture.slides[0].imageUrl} 
+                        alt="Presentation slide"
+                        className="w-full h-full object-contain"
+                    />
+                ) : (
+                    <div className="w-full h-64 bg-gray-200 flex items-center justify-center">
+                        <p className="text-gray-500">No presentation available</p>
+                    </div>
+                )}
             </div>
-          </div>
         </div>
 
-        {/* Slides */}
-        <div className={`${isFullscreenVideo ? 'h-1/4' : 'w-1/2'} bg-gray-100 p-4`}>
-          <div className="h-full flex flex-col">
-            <div className="flex-1 bg-white rounded-lg shadow-sm p-4">
-              {/* Slide content will go here */}
-              <div className="w-full h-full flex items-center justify-center text-gray-500">
-                Slide Content
-              </div>
+        {/* Transcription Section */}
+        <div className="bg-white border-t">
+            <div className="max-w-4xl mx-auto p-4">
+                <h2 className="text-xl font-semibold mb-4">Transcription</h2>
+                <div className="bg-gray-50 rounded-lg p-4 space-y-4">
+                    {lecture?.transcription.map((segment) => (
+                        <div 
+                            key={segment.id}
+                            className="flex items-start space-x-4 p-2"
+                        >
+                            <span className="text-sm text-gray-500 whitespace-nowrap">
+                                {formatTime(segment.startTime)}
+                            </span>
+                            <p className="text-gray-700">
+                                {segment.text}
+                            </p>
+                        </div>
+                    ))}
+                </div>
             </div>
-            
-            {/* Slide Navigation */}
-            <div className="mt-4 flex items-center justify-between">
-              <button
-                onClick={() => setCurrentSlide(prev => Math.max(0, prev - 1))}
-                className="p-2 rounded-full hover:bg-gray-200"
-              >
-                <ChevronLeft className="h-6 w-6" />
-              </button>
-              <span className="text-sm text-gray-600">
-                Slide {currentSlide + 1} of X
-              </span>
-              <button
-                onClick={() => setCurrentSlide(prev => prev + 1)}
-                className="p-2 rounded-full hover:bg-gray-200"
-              >
-                <ChevronRight className="h-6 w-6" />
-              </button>
-            </div>
-          </div>
         </div>
-      </div>
-
-      {/* Bottom Section: Transcription */}
-      <div className="h-1/4 bg-white border-t">
-        <div className="h-full p-4">
-          <div className="bg-gray-50 h-full rounded-lg p-4 overflow-y-auto">
-            {/* Transcription content will go here */}
-            <div className="space-y-4">
-              <div className="flex items-start space-x-4">
-                <span className="text-sm text-gray-500 whitespace-nowrap">
-                  00:00:00
-                </span>
-                <p className="text-gray-700">
-                  Transcription text will appear here synchronized with the video playback...
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
     </div>
-  );
+);
 };

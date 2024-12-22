@@ -1,3 +1,4 @@
+//src/pages/HomePage.tsx
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { BookOpen, FileText, Video, ArrowRight } from 'lucide-react';
