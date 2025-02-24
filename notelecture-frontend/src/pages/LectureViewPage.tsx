@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { APIService } from '../services/api';
-import { Lecture } from '../types';
+import { Lecture, TranscriptionSegment } from '../types';
 
 const LectureViewPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -10,6 +10,7 @@ const LectureViewPage: React.FC = () => {
   const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string>('');
+  const [slideTranscriptions, setSlideTranscriptions] = useState<TranscriptionSegment[]>([]);
 
   useEffect(() => {
     const fetchLecture = async () => {
@@ -18,6 +19,12 @@ const LectureViewPage: React.FC = () => {
         setIsLoading(true);
         const lectureData = await APIService.getLecture(id);
         setLecture(lectureData);
+        
+        // Group transcriptions for the current slide
+        const currentSlideTranscriptions = lectureData.transcription.filter(
+          segment => segment.slideIndex === currentSlideIndex
+        );
+        setSlideTranscriptions(currentSlideTranscriptions);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load lecture');
       } finally {
@@ -26,7 +33,23 @@ const LectureViewPage: React.FC = () => {
     };
 
     fetchLecture();
-  }, [id]);
+  }, [id, currentSlideIndex]);
+
+  const handlePreviousSlide = () => {
+    setCurrentSlideIndex(prev => Math.max(0, prev - 1));
+  };
+
+  const handleNextSlide = () => {
+    if (lecture) {
+      setCurrentSlideIndex(prev => Math.min(lecture.slides.length - 1, prev + 1));
+    }
+  };
+
+  const formatTime = (seconds: number) => {
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = Math.floor(seconds % 60);
+    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+  };
 
   if (isLoading) {
     return (
@@ -43,20 +66,6 @@ const LectureViewPage: React.FC = () => {
       </div>
     );
   }
-
-  const handlePreviousSlide = () => {
-    setCurrentSlideIndex(prev => Math.max(0, prev - 1));
-  };
-
-  const handleNextSlide = () => {
-    setCurrentSlideIndex(prev => Math.min(lecture.slides.length - 1, prev + 1));
-  };
-
-  const formatTime = (seconds: number) => {
-    const minutes = Math.floor(seconds / 60);
-    const remainingSeconds = Math.floor(seconds % 60);
-    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
-  };
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50 p-4">
@@ -109,21 +118,29 @@ const LectureViewPage: React.FC = () => {
           {/* Transcription Panel */}
           <div className="bg-white rounded-lg shadow-sm">
             <div className="p-4">
-              <h2 className="text-xl font-semibold mb-4">Transcription</h2>
+              <h2 className="text-xl font-semibold mb-4">
+                Transcription for Slide {currentSlideIndex + 1}
+              </h2>
               <div className="space-y-4 max-h-96 overflow-y-auto">
-                {lecture.transcription.map((segment) => (
-                  <div 
-                    key={segment.id}
-                    className="flex items-start space-x-4 p-2 hover:bg-gray-50 rounded"
-                  >
-                    <span className="text-sm text-gray-500 whitespace-nowrap">
-                      {formatTime(segment.startTime)}
-                    </span>
-                    <p className="text-gray-700 flex-1">
-                      {segment.text}
-                    </p>
+                {slideTranscriptions.length > 0 ? (
+                  slideTranscriptions.map((segment) => (
+                    <div 
+                      key={segment.id}
+                      className="flex items-start space-x-4 p-2 hover:bg-gray-50 rounded"
+                    >
+                      <span className="text-sm text-gray-500 whitespace-nowrap">
+                        {formatTime(segment.startTime)}
+                      </span>
+                      <p className="text-gray-700 flex-1">
+                        {segment.text}
+                      </p>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center text-gray-500 py-4">
+                    No transcriptions available for this slide
                   </div>
-                ))}
+                )}
               </div>
             </div>
           </div>

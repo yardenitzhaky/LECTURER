@@ -3,7 +3,6 @@ from sqlalchemy import Column, Integer, String, Float, ForeignKey
 from sqlalchemy.orm import relationship
 from app.db.base_class import Base
 
-# app/db/models/transcription.py
 class TranscriptionSegment(Base):
     __tablename__ = "transcription_segments"
 
@@ -13,8 +12,18 @@ class TranscriptionSegment(Base):
     end_time = Column(Float)
     text = Column(String(1000))
     confidence = Column(Float)
-    slide_id = Column(Integer, ForeignKey("slides.id"), nullable=True)
+    slide_index = Column(Integer, nullable=False, default=0)
 
     # Relationship
     lecture = relationship("Lecture", back_populates="transcription_segments")
-    slide = relationship("Slide", back_populates="segments")
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "lectureId": self.lecture_id,
+            "startTime": self.start_time,
+            "endTime": self.end_time,
+            "text": self.text,
+            "confidence": self.confidence,
+            "slideIndex": self.slide_index,
+        }

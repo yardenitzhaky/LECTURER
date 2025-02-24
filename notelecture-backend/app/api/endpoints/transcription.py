@@ -11,6 +11,7 @@ import base64
 import io
 from app.services.transcription import TranscriptionService
 from app.services.presentation import PresentationService
+from app.services.slide_matching import SlideMatchingService
 from app.db.models import Lecture, TranscriptionSegment, Slide
 from app.api import deps
 import logging
@@ -20,6 +21,7 @@ router = APIRouter()
 
 transcription_service = TranscriptionService()
 presentation_service = PresentationService()
+slide_matching_service = SlideMatchingService()
 
 @router.post("/transcribe/")
 async def transcribe_lecture(
@@ -104,6 +106,8 @@ async def transcribe_lecture(
             detail=f"Error processing files: {str(e)}"
         )
 
+# app/api/endpoints/transcription.py
+
 async def process_video_background(
     video_path: str,
     lecture_id: int,
@@ -121,18 +125,46 @@ async def process_video_background(
         # Transcribe
         transcription = await transcription_service.transcribe(audio_path)
 
+        # Get slides for the lecture
+        slides = db.query(Slide).filter(Slide.lecture_id == lecture_id).order_by(Slide.index).all()
+        
+        # Prepare slides data for matching
+        slides_data = [
+            {
+                'image_data': slide.image_data,
+                'index': slide.index
+            }
+            for slide in slides
+        ]
+
+        # Match transcription segments to slides
+        matched_segments = await slide_matching_service.match_transcription_to_slides(
+            video_path,
+            slides_data,
+            [
+                {
+                    'start_time': segment['start_time'],
+                    'end_time': segment['end_time'],
+                    'text': segment['text'],
+                    'confidence': segment['confidence']
+                }
+                for segment in transcription['segments']
+            ]
+        )
+
         # Update lecture status
         lecture = db.query(Lecture).filter(Lecture.id == lecture_id).first()
         lecture.status = "completed"
         
-        # Add transcription segments
-        for segment in transcription["segments"]:
+        # Add transcription segments with slide indices
+        for segment in matched_segments:
             db_segment = TranscriptionSegment(
                 lecture_id=lecture_id,
-                start_time=segment["start_time"],
-                end_time=segment["end_time"],
-                text=segment["text"],
-                confidence=segment["confidence"]
+                start_time=segment['start_time'],
+                end_time=segment['end_time'],
+                text=segment['text'],
+                confidence=segment['confidence'],
+                slide_index=segment['slide_index']
             )
             db.add(db_segment)
 
@@ -171,6 +203,7 @@ async def get_lecture_transcription(
         # Get transcription segments
         segments = db.query(TranscriptionSegment)\
             .filter(TranscriptionSegment.lecture_id == lecture_id)\
+            .order_by(TranscriptionSegment.start_time)\
             .all()
 
         # Format response
@@ -188,7 +221,9 @@ async def get_lecture_transcription(
                 "startTime": segment.start_time,
                 "endTime": segment.end_time,
                 "text": segment.text,
-                "confidence": segment.confidence
+                "confidence": segment.confidence,
+                "slideIndex": segment.slide_index
+                
             }
             for segment in segments
         ]

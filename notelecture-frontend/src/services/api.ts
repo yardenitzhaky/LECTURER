@@ -55,6 +55,7 @@ export class APIService {
                     endTime: segment.endTime,
                     text: segment.text,
                     confidence: segment.confidence,
+                    slideIndex: segment.slideIndex,
                 })),
             };
         } catch (error: unknown) {

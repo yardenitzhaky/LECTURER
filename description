@@ -35,6 +35,7 @@ Technology Stack:
 
 Frontend: React.js + TypeScript
 Backend: Python
+DB: MySQL
 AI Services: OpenAI Whisper for transcription (additional AI services may be needed)
 File Processing: FFmpeg, python-pptx (additional processing tools may be needed)
 
@@ -43,7 +44,8 @@ Key Challenges:
 Accurate slide transition detection
 Precise synchronization of audio with slides
 Handling various presentation formats
-System performance with large files
+Handling URLS for youtube/zoom videos
+System performance and cost with large files
 
 End Result:
 

@@ -5,10 +5,12 @@ export interface TranscriptionSegment {
   endTime: number;
   text: string;
   confidence: number;
+  slideIndex: number;
 }
 
 export interface Slide {
   imageUrl: string;
+  index: number;
 }
 
 export interface Lecture {
