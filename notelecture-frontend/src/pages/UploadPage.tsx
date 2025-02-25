@@ -40,34 +40,46 @@ export const UploadPage: React.FC = () => {
     setVideoFile(null);
   };
 
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setIsProcessing(true);
-    setError('');
-    
-    try {
-      if (!presentationFile || (!videoFile && !videoUrl)) {
-        throw new Error('Please provide both video and presentation files');
-      }
-
-      // Create FormData and append both files
-      const formData = new FormData();
-      if (videoFile) {
-        formData.append('video', videoFile);
-      }
-      if (videoUrl) {
-        formData.append('video_url', videoUrl);
-      }
-      formData.append('presentation', presentationFile);
-
-      const response = await APIService.uploadLecture(formData);
-      navigate(`/lecture/${response.lecture_id}`);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Upload failed');
-    } finally {
-      setIsProcessing(false);
+const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+  event.preventDefault();
+  setIsProcessing(true);
+  setError('');
+  
+  try {
+    if (!presentationFile || (!videoFile && !videoUrl)) {
+      throw new Error('Please provide both video (file or URL) and presentation files');
     }
-  };
+
+    // Create FormData
+    const formData = new FormData();
+    
+    // Add files/data to FormData
+    if (videoFile) {
+      formData.append('video', videoFile);
+    }
+    
+    if (videoUrl && videoUrl.trim() !== '') {
+      formData.append('video_url', videoUrl);
+      console.log('Adding video URL to form data:', videoUrl);
+    }
+    
+    formData.append('presentation', presentationFile);
+    
+    // Debug log
+    console.log('Form data contents:');
+    for (const pair of formData.entries()) {
+      console.log(`${pair[0]}: ${typeof pair[1] === 'object' ? 'File object' : pair[1]}`);
+    }
+
+    const response = await APIService.uploadLecture(formData);
+    navigate(`/lecture/${response.lecture_id}`);
+  } catch (err) {
+    console.error('Error during upload:', err);
+    setError(err instanceof Error ? err.message : 'Upload failed');
+  } finally {
+    setIsProcessing(false);
+  }
+};
 
   return (
     <div className="max-w-3xl mx-auto p-4">

@@ -1,5 +1,5 @@
 # app/api/endpoints/transcription.py
-from fastapi import APIRouter, UploadFile, File, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Form, UploadFile, File, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
 from fastapi import Depends
 from typing import Dict, Any, Optional
@@ -28,7 +28,7 @@ async def transcribe_lecture(
     background_tasks: BackgroundTasks,
     video: Optional[UploadFile] = File(None),
     presentation: UploadFile = File(...),
-    video_url: Optional[str] = None,
+    video_url: Optional[str] = Form(None),
     db: Session = Depends(deps.get_db)
 ) -> Dict[str, Any]:
     """
@@ -40,6 +40,8 @@ async def transcribe_lecture(
                 status_code=400,
                 detail="Either video file or video URL must be provided"
             )
+
+        print(f"Received request: video={video is not None}, video_url={video_url}")
 
         # Create uploads directory if it doesn't exist (for video only)
         upload_dir = Path("uploads")
@@ -115,15 +117,38 @@ async def process_video_background(
 ):
     """Background task to process video."""
     try:
+        # Update status
+        lecture = db.query(Lecture).filter(Lecture.id == lecture_id).first()
+        lecture.status = "downloading"
+        db.commit()
         # Extract audio if it's a video file
         if not video_path.startswith('http'):
+            logger.info(f"Processing local video file: {video_path}")
             audio_path = await transcription_service.extract_audio(video_path)
         else:
             # Handle YouTube/URL case
+            logger.info(f"Processing video from URL: {video_path}")
             audio_path = await transcription_service.download_and_extract_audio(video_path)
 
+        logger.info(f"Audio extraction completed. Audio path: {audio_path}")
+
+
+        # Check if audio file exists
+        if not os.path.exists(audio_path):
+            raise FileNotFoundError(f"Audio file not found: {audio_path}")
+        
+        lecture = db.query(Lecture).filter(Lecture.id == lecture_id).first()
+        lecture.status = "transcribing"
+        db.commit()
+            
         # Transcribe
+        logger.info("Starting transcription...")
         transcription = await transcription_service.transcribe(audio_path)
+        logger.info("Transcription completed")
+
+        lecture = db.query(Lecture).filter(Lecture.id == lecture_id).first()
+        lecture.status = "matching"
+        db.commit()
 
         # Get slides for the lecture
         slides = db.query(Slide).filter(Slide.lecture_id == lecture_id).order_by(Slide.index).all()

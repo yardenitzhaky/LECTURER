@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 class SlideMatchingService:
     def __init__(self):
         # Configuration parameters
-        self.frame_interval = 1  # Check every second for slide changes
+        self.frame_interval = 2  # Check every second for slide changes
         self.min_inliers = 4  # Minimum number of inliers for a valid homography
         self.inlier_threshold = 5.0  # RANSAC inlier threshold
         self.good_match_percent = 0.08  # Percentage of good matches to use
@@ -72,24 +72,26 @@ class SlideMatchingService:
             # Process video
             timeline = await self._process_video(video_path, slide_images, slide_features)
             
-            # If timeline is too sparse, try with higher sensitivity
-            if len(timeline) < 3 and len(slide_images) > 2:
-                logger.info("Few slide transitions detected, retrying with higher sensitivity")
-                
-                # Backup original timeline
-                original_timeline = timeline.copy()
-                
-                # Try with higher sensitivity settings
-                self.min_confidence = 0.15  # Lower confidence threshold
-                self.min_inliers = 8  # Require fewer inliers
-                self.frame_interval = 0.5  # Check frames more frequently
-                
-                # Retry processing
-                timeline = await self._process_video(video_path, slide_images, slide_features)
-                
-                # If still not enough transitions, use the best timeline
-                if len(timeline) < len(original_timeline):
-                    timeline = original_timeline
+            # For URL videos, we don't need to retry with different sensitivities
+            if not video_path.startswith(('http://', 'https://')):
+                # If timeline is too sparse, try with higher sensitivity
+                if len(timeline) < 3 and len(slide_images) > 2:
+                    logger.info("Few slide transitions detected, retrying with higher sensitivity")
+                    
+                    # Backup original timeline
+                    original_timeline = timeline.copy()
+                    
+                    # Try with higher sensitivity settings
+                    self.min_confidence = 0.15  # Lower confidence threshold
+                    self.min_inliers = 8  # Require fewer inliers
+                    self.frame_interval = 0.5  # Check frames more frequently
+                    
+                    # Retry processing
+                    timeline = await self._process_video(video_path, slide_images, slide_features)
+                    
+                    # If still not enough transitions, use the best timeline
+                    if len(timeline) < len(original_timeline):
+                        timeline = original_timeline
             
             # Match transcription segments to slides using timeline
             matched_segments = []
@@ -176,15 +178,40 @@ class SlideMatchingService:
             return image  # Return original image if preprocessing fails
 
     async def _process_video(
-        self, 
-        video_path: str, 
-        slide_images: List[np.ndarray],
-        slide_features: List[Dict[str, Any]]
-    ) -> List[Dict[str, float]]:
+    self, 
+    video_path: str, 
+    slide_images: List[np.ndarray],
+    slide_features: List[Dict[str, Any]]
+) -> List[Dict[str, float]]:
         """Process video and detect slide transitions."""
         timeline = [{'time': 0, 'slide_index': 0}]  # Start with the first slide
         
         try:
+            # Check if it's a URL or local file
+            if video_path.startswith(('http://', 'https://')):
+                logger.info(f"URL video detected. Creating estimated timeline for slides.")
+                
+                # For URL videos, we can't easily detect transitions with OpenCV,
+                # so we'll create an estimated timeline based on number of slides
+                num_slides = len(slide_images)
+                
+                if num_slides > 1:
+                    # Estimate each slide gets equal time (basic fallback approach)
+                    estimated_duration = 1200  # Assume 20 minutes if we don't know
+                    time_per_slide = estimated_duration / (num_slides - 1)
+                    
+                    # Create timeline entries for each slide
+                    for i in range(1, num_slides):
+                        timeline.append({
+                            'time': i * time_per_slide,
+                            'slide_index': i
+                        })
+                        
+                    logger.info(f"Created estimated timeline with {len(timeline)} points for {num_slides} slides")
+                
+                return timeline
+                
+            # Original code for local video files
             cap = cv2.VideoCapture(video_path)
             if not cap.isOpened():
                 logger.error(f"Cannot open video: {video_path}")
@@ -235,7 +262,7 @@ class SlideMatchingService:
                             (time_since_last_detection >= 2.0 or confidence > 0.5)):
                             
                             logger.info(f"Slide change at {current_time:.2f}s: {current_slide_index} -> "
-                                       f"{best_match_idx} (confidence: {confidence:.2f})")
+                                        f"{best_match_idx} (confidence: {confidence:.2f})")
                             
                             timeline.append({
                                 'time': current_time,
