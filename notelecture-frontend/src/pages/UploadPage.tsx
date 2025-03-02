@@ -1,6 +1,6 @@
 // src/pages/UploadPage.tsx
 import React, { useState, ChangeEvent, FormEvent } from 'react';
-import { Upload, FileType, Video } from 'lucide-react';
+import { Upload, FileType, Video, Clock } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { APIService } from '../api';
 
@@ -164,6 +164,14 @@ const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
                 </p>
               )}
             </div>
+          </div>
+
+          {/* Processing Time Notice */}
+          <div className="flex items-center p-4 bg-blue-50 rounded-lg">
+            <Clock className="h-5 w-5 text-blue-500 mr-2" />
+            <p className="text-sm text-blue-700">
+              Note: Processing may take approximately as long as your video's length. You'll be redirected when complete.
+            </p>
           </div>
 
           <div className="flex justify-center">
