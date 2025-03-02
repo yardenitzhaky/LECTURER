@@ -1,19 +1,35 @@
 {
   "compilerOptions": {
+    // From tsconfig.node.json
+    "composite": true,
+    "emitDeclarationOnly": true,
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.node.tsbuildinfo",
+
+    // Unified target/lib
     "target": "ESNext",
-    "lib": ["DOM", "DOM.Iterable", "ESNext"],
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+
+    // From all three (no major conflict)
     "module": "ESNext",
     "skipLibCheck": true,
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
-    "resolveJsonModule": true,
     "isolatedModules": true,
-    "noEmit": true,
     "jsx": "react-jsx",
     "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
+
+    // From tsconfig.app.json & tsconfig.node.json
+    "moduleDetection": "force",
+    "noUncheckedSideEffectImports": true,
+
+    // From tsconfig.app.json
+    "useDefineForClassFields": true,
+
+    // From tsconfig.json
+    "resolveJsonModule": true,
     "allowJs": true,
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
@@ -22,6 +38,7 @@
       "@/*": ["src/*"]
     }
   },
-  "include": ["src"],
-  "references": [{ "path": "./tsconfig.node.json" }]
+
+  // Union of include from all three
+  "include": ["src", "vite.config.ts"]
 }

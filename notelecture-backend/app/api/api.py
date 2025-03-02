@@ -19,6 +19,7 @@ import logging
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
+# Initialize service objects for transcription, presentation processing, and slide matching
 transcription_service = TranscriptionService()
 presentation_service = PresentationService()
 slide_matching_service = SlideMatchingService()
@@ -32,9 +33,14 @@ async def transcribe_lecture(
     db: Session = Depends(deps.get_db)
 ) -> Dict[str, Any]:
     """
-    Upload video and presentation files and process them.
+    Process a lecture by accepting a presentation file and either a video file or URL.
+    Creates a new lecture record, extracts slides from the presentation,
+    and starts background processing of the video.
+    
+    Returns lecture ID and processing status.
     """
     try:
+        # Validate that either a video file or URL was provided
         if not video and not video_url:
             raise HTTPException(
                 status_code=400,
@@ -51,7 +57,7 @@ async def transcribe_lecture(
         presentation_content = await presentation.read()
         file_extension = presentation.filename.split('.')[-1]
 
-        # Process video
+        # Handle video input - either save uploaded file or use URL
         if video:
             video_filename = f"{uuid.uuid4()}_{video.filename}"
             video_path = upload_dir / video_filename
@@ -62,7 +68,7 @@ async def transcribe_lecture(
             # Handle video URL case
             video_path = video_url
 
-        # Create lecture record
+        # Create lecture record in 'processing' state
         lecture = Lecture(
             title=presentation.filename,
             status="processing",
@@ -71,13 +77,13 @@ async def transcribe_lecture(
         db.add(lecture)
         db.flush()
 
-        # Process presentation immediately
+        # Process presentation immediately to extract slides
         slide_images = await presentation_service.process_presentation(
             presentation_content,
             file_extension
         )
 
-        # Save slides to database with base64 data
+        # Save extracted slides to database with base64-encoded image data
         for index, image_data in enumerate(slide_images):
             slide = Slide(
                 lecture_id=lecture.id,
@@ -86,7 +92,7 @@ async def transcribe_lecture(
             )
             db.add(slide)
 
-        # Process video in background
+        # Process video in background to avoid blocking the response
         background_tasks.add_task(
             process_video_background,
             video_path if isinstance(video_path, str) else str(video_path),
@@ -108,20 +114,30 @@ async def transcribe_lecture(
             detail=f"Error processing files: {str(e)}"
         )
 
-# app/api/endpoints/transcription.py
-
 async def process_video_background(
     video_path: str,
     lecture_id: int,
     db: Session
 ):
-    """Background task to process video."""
+    """
+    Background task that processes a video for a lecture.
+    
+    Steps:
+    1. Extract audio from video or download from URL
+    2. Transcribe audio to text
+    3. Match transcription segments to slides
+    4. Update lecture with transcription data
+    5. Clean up temporary files
+    
+    Updates lecture status throughout the process.
+    """
     try:
-        # Update status
+        # Update status to 'downloading'
         lecture = db.query(Lecture).filter(Lecture.id == lecture_id).first()
         lecture.status = "downloading"
         db.commit()
-        # Extract audio if it's a video file
+        
+        # Extract audio depending on source (local file or URL)
         if not video_path.startswith('http'):
             logger.info(f"Processing local video file: {video_path}")
             audio_path = await transcription_service.extract_audio(video_path)
@@ -132,28 +148,28 @@ async def process_video_background(
 
         logger.info(f"Audio extraction completed. Audio path: {audio_path}")
 
-
-        # Check if audio file exists
+        # Verify audio file was created successfully
         if not os.path.exists(audio_path):
             raise FileNotFoundError(f"Audio file not found: {audio_path}")
         
+        # Update status to 'transcribing' and start transcription
         lecture = db.query(Lecture).filter(Lecture.id == lecture_id).first()
         lecture.status = "transcribing"
         db.commit()
             
-        # Transcribe
         logger.info("Starting transcription...")
         transcription = await transcription_service.transcribe(audio_path)
         logger.info("Transcription completed")
 
+        # Update status to 'matching' and begin slide matching
         lecture = db.query(Lecture).filter(Lecture.id == lecture_id).first()
         lecture.status = "matching"
         db.commit()
 
-        # Get slides for the lecture
+        # Get slides for the lecture to match with transcription
         slides = db.query(Slide).filter(Slide.lecture_id == lecture_id).order_by(Slide.index).all()
         
-        # Prepare slides data for matching
+        # Format slides for matching algorithm
         slides_data = [
             {
                 'image_data': slide.image_data,
@@ -162,26 +178,29 @@ async def process_video_background(
             for slide in slides
         ]
 
+        # Format transcription segments for matching algorithm
+        transcription_data = [
+            {
+                'start_time': segment['start_time'],
+                'end_time': segment['end_time'],
+                'text': segment['text'],
+                'confidence': segment['confidence']
+            }
+            for segment in transcription['segments']
+        ]
+
         # Match transcription segments to slides
         matched_segments = await slide_matching_service.match_transcription_to_slides(
             video_path,
             slides_data,
-            [
-                {
-                    'start_time': segment['start_time'],
-                    'end_time': segment['end_time'],
-                    'text': segment['text'],
-                    'confidence': segment['confidence']
-                }
-                for segment in transcription['segments']
-            ]
+            transcription_data
         )
 
-        # Update lecture status
+        # Update lecture status to 'completed'
         lecture = db.query(Lecture).filter(Lecture.id == lecture_id).first()
         lecture.status = "completed"
         
-        # Add transcription segments with slide indices
+        # Add transcription segments with slide indices to database
         for segment in matched_segments:
             db_segment = TranscriptionSegment(
                 lecture_id=lecture_id,
@@ -195,7 +214,7 @@ async def process_video_background(
 
         db.commit()
 
-        # Cleanup
+        # Clean up temporary files
         await transcription_service.cleanup(audio_path)
         if not video_path.startswith('http'):
             os.remove(video_path)
@@ -211,7 +230,12 @@ async def get_lecture_transcription(
     db: Session = Depends(deps.get_db)
 ) -> Dict[str, Any]:
     """
-    Retrieve the transcription and slides for a specific lecture.
+    Retrieve complete lecture data including slides and transcription segments.
+    
+    Returns:
+        - Lecture metadata (id, title, status)
+        - Slides with base64 image data
+        - Transcription segments with timing and slide mapping
     """
     try:
         # Get lecture info
@@ -231,15 +255,16 @@ async def get_lecture_transcription(
             .order_by(TranscriptionSegment.start_time)\
             .all()
 
-        # Format response
+        # Format slides for API response
         formatted_slides = [
             {
-                "imageUrl": slide.image_data,  # Now using base64 data directly
+                "imageUrl": slide.image_data,  # Base64-encoded image data
                 "index": slide.index
             }
             for slide in slides
         ]
 
+        # Format transcription segments for API response
         formatted_segments = [
             {
                 "id": segment.id,
@@ -248,11 +273,11 @@ async def get_lecture_transcription(
                 "text": segment.text,
                 "confidence": segment.confidence,
                 "slideIndex": segment.slide_index
-                
             }
             for segment in segments
         ]
 
+        # Combine all data into a structured response
         return {
             "lecture_id": lecture_id,
             "title": lecture.title,

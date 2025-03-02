@@ -14,15 +14,15 @@ export interface Slide {
 }
 
 export interface Lecture {
-  lecture_id: number;  // Changed from id to match backend
+  lecture_id: number;  
   title: string;
   status: string;
-  slides: Slide[];     // Simplified slides interface
+  slides: Slide[];     
   transcription: TranscriptionSegment[];
 }
 
 export interface UploadResponse {
-  lecture_id: number;  // Changed from lectureId to match backend
+  lecture_id: number; 
   message: string;
 }
 
