@@ -1,4 +1,4 @@
-// src/types/index.ts
+// src/index.ts
 export interface TranscriptionSegment {
   id: string;
   startTime: number;

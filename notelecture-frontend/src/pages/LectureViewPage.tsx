@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { APIService } from '../services/api';
-import { Lecture, TranscriptionSegment } from '../types';
+import { APIService } from '../api';
+import { Lecture, TranscriptionSegment } from '..';
 
 const LectureViewPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();

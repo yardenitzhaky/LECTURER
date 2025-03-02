@@ -13,4 +13,11 @@ class Slide(Base):
     
     # Relationships
     lecture = relationship("Lecture", back_populates="slides")
-    # Removed the segments relationship since we're using slide_index instead
+    
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "lecture_id": self.lecture_id,
+            "index": self.index,
+            "image_data": self.image_data
+        }

@@ -1,7 +1,7 @@
 # app/main.py
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api.endpoints import transcription
+from app.api import api
 from app.core.config import settings
 from fastapi.staticfiles import StaticFiles
 import os
@@ -26,4 +26,4 @@ app.add_middleware(
 )
 
 # Include routers
-app.include_router(transcription.router, prefix="/api")
+app.include_router(api.router, prefix="/api")

@@ -1,4 +1,4 @@
-# app/api/endpoints/transcription.py
+# app/api/api.py
 from fastapi import APIRouter, Form, UploadFile, File, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
 from fastapi import Depends
@@ -13,7 +13,7 @@ from app.services.transcription import TranscriptionService
 from app.services.presentation import PresentationService
 from app.services.slide_matching import SlideMatchingService
 from app.db.models import Lecture, TranscriptionSegment, Slide
-from app.api import deps
+from app import deps
 import logging
 
 logger = logging.getLogger(__name__)

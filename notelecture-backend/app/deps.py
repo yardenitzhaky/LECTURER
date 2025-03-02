@@ -1,4 +1,4 @@
-# app/api/deps.py
+# app/deps.py
 from typing import Generator
 from app.db.session import SessionLocal
 

@@ -2,7 +2,7 @@
 import React, { useState, ChangeEvent, FormEvent } from 'react';
 import { Upload, FileType, Video } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { APIService } from '../services/api';
+import { APIService } from '../api';
 
 export const UploadPage: React.FC = () => {
   const navigate = useNavigate();

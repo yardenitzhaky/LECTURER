@@ -10,10 +10,17 @@ class Lecture(Base):
     title = Column(String(255))
     status = Column(String(50))
     video_path = Column(String(255))
-    
-    # Add presentation_path
     presentation_path = Column(String(255))
     
     # Relationships
     transcription_segments = relationship("TranscriptionSegment", back_populates="lecture")
     slides = relationship("Slide", back_populates="lecture") 
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "title": self.title,
+            "status": self.status,
+            "video_path": self.video_path,
+            "presentation_path": self.presentation_path
+        }

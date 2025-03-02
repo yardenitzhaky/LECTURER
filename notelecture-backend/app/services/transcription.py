@@ -109,7 +109,6 @@ class TranscriptionService:
                 beam_size=5,
                 task="transcribe",  # Important: Use "transcribe" instead of default "translate"
                 language=None,      # Setting language to None allows auto-detection
-                translate=False     # Explicitly disable translation
             )
             
             # Process segments

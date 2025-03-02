@@ -1,4 +1,4 @@
-// src/utils/format.ts
+// src/format.ts
 
 export const formatTime = (seconds: number): string => {
     const hours = Math.floor(seconds / 3600);
