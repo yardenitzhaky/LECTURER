@@ -12,8 +12,8 @@ PyMySQL==1.1.1
 
 # AI and Processing
 faster-whisper==0.10.0
-torch==2.1.2
-torchaudio==2.1.2
+torch==2.6.0
+torchaudio==2.6.0
 transformers==4.38.0
 moviepy==1.0.3
 numpy==1.25.0
