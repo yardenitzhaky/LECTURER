@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 class SlideMatchingService:
     def __init__(self):
         # Configuration parameters - MODIFIED for better detection
-        self.frame_interval = 1  # Check more frequently for slide changes
+        self.frame_interval = 3  # Check more frequently for slide changes
         self.min_inliers = 3  # Reduced for more permissive matching
         self.inlier_threshold = 4.0  # Slightly more generous threshold
         self.good_match_percent = 0.1  # Increased percentage
@@ -21,14 +21,14 @@ class SlideMatchingService:
         
         # Initialize feature detectors and matchers
         # ORB is faster than SIFT and works well for slides
-        self.detector = cv2.ORB_create(nfeatures=5000)
+        self.detector = cv2.ORB_create(nfeatures=4000)
         
         # BRISK is another good alternative with more features but still fast
         self.brisk_detector = cv2.BRISK_create()
         
         # For challenging matches, we'll also use SIFT as a fallback
         try:
-            self.sift = cv2.SIFT_create(nfeatures=2000)
+            self.sift = cv2.SIFT_create(nfeatures=1750)
             self.has_sift = True
         except:
             self.has_sift = False

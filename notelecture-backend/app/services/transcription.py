@@ -22,22 +22,21 @@ class TranscriptionService:
             "Authorization": f"Bearer {self.api_key}"
         }
         # How often to poll for status (in seconds)
-        self.polling_interval = 5
+        self.polling_interval = 7
         # Maximum polling attempts (adjust as needed)
-        self.max_polling_attempts = 120  # 10 minutes at 5-second intervals
+        self.max_polling_attempts = 105 
 
     async def extract_audio(self, video_path: str) -> str:
-        """Extract audio from video file."""
+        """Extracts audio from a local video file into MP3 format."""
+        # Output MP3 instead of WAV
+        output_audio_path = Path(video_path).with_suffix('.mp3')
         try:
-            # Create output path
-            audio_path = video_path.rsplit('.', 1)[0] + '.wav'
-            
-            # Extract audio using moviepy
-            video = mp.VideoFileClip(video_path)
-            video.audio.write_audiofile(audio_path)
-            video.close()
-            
-            return audio_path
+            logger.info(f"Extracting audio from '{video_path}' to '{output_audio_path}'")
+            with mp.VideoFileClip(video_path) as video:
+                # Specify codec for MP3
+                video.audio.write_audiofile(str(output_audio_path), codec='libmp3lame', logger=None)
+            logger.info("Audio extraction successful (MP3).")
+            return str(output_audio_path)
         except Exception as e:
             logger.error(f"Error extracting audio: {str(e)}")
             raise

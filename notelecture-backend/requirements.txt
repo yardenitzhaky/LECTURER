@@ -1,39 +1,33 @@
 # Core FastAPI dependencies
 fastapi==0.109.0
 uvicorn[standard]==0.27.0
-python-multipart==0.0.9
-python-jose[cryptography]==3.3.0
-passlib[bcrypt]==1.7.4
+python-multipart==0.0.9 # Needed for file uploads (Form(...), UploadFile(...))
 
 # Database
 SQLAlchemy==2.0.25
-alembic==1.13.1
-PyMySQL==1.1.1
+PyMySQL==1.1.1           # MySQL driver
 
-# AI and Processing
-faster-whisper==0.10.0
-torch==2.6.0
-torchaudio==2.6.0
-transformers==4.38.0
-moviepy==1.0.3
-numpy==1.25.0
-Pillow==10.4.0
-ffmpeg-python==0.2.0
-opencv-python==4.9.0.80
-yt-dlp==2023.11.16
+# AI and Processing (Core)
+moviepy==1.0.3           # For audio extraction from video
+numpy==1.25.0            # Required by OpenCV and other numerical tasks
+Pillow==10.4.0           # Image handling (often needed with OpenCV/PyMuPDF)
+opencv-python==4.9.0.80  # For slide matching (computer vision)
+yt-dlp==2023.11.16       # For downloading videos from URLs
+
+# External API Communication
+requests==2.31.0         # Explicitly add for IVRIT.AI API calls (or use latest stable)
 
 # File Handling
-python-pptx==0.6.21
-aiofiles==23.2.1
-PyMuPDF==1.23.22  # Added for PDF processing
+aiofiles==23.2.1         # For async file saving
+PyMuPDF==1.23.22         # For PDF processing (presentation slides)
+python-pptx==0.6.21      # For PowerPoint processing (if needed)
+
 
 # Utilities
-python-dotenv==1.0.0
-tqdm==4.67.1
+python-dotenv==1.0.0     # For loading .env files
+pydantic-settings==2.1.0 # For settings management
 
 # Testing
 pytest>=8.2.0
 pytest-asyncio==0.25.0
-httpx==0.28.1
-
-pydantic-settings==2.1.0  # For settings management
+httpx==0.28.1            # For testing FastAPI endpoints
