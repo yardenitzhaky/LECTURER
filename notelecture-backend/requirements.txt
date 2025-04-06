@@ -19,12 +19,13 @@ moviepy==1.0.3
 numpy==1.25.0
 Pillow==10.4.0
 ffmpeg-python==0.2.0
-opencv-python==4.9.0.80 
+opencv-python==4.9.0.80
 yt-dlp==2023.11.16
 
 # File Handling
 python-pptx==0.6.21
 aiofiles==23.2.1
+PyMuPDF==1.23.22  # Added for PDF processing
 
 # Utilities
 python-dotenv==1.0.0

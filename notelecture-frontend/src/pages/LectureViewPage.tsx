@@ -116,23 +116,23 @@ const LectureViewPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Transcription Panel */}
+          {/* Transcription Panel - Modified for RTL */}
           <div className="bg-white rounded-lg shadow-sm">
             <div className="p-4">
-              <h2 className="text-xl font-semibold mb-4">
+              <h2 className="text-xl font-semibold mb-4 text-right">
                 Transcription for Slide {currentSlideIndex + 1}
               </h2>
-              <div className="space-y-4 max-h-96 overflow-y-auto">
+              <div dir="rtl" className="space-y-4 max-h-96 overflow-y-auto">
                 {slideTranscriptions.length > 0 ? (
                   slideTranscriptions.map((segment) => (
                     <div 
                       key={segment.id}
-                      className="flex items-start space-x-4 p-2 hover:bg-gray-50 rounded"
+                      className="flex items-start space-x-4 p-2 hover:bg-gray-50 rounded flex-row-reverse space-x-reverse"
                     >
                       <span className="text-sm text-gray-500 whitespace-nowrap">
                         {formatTime(segment.startTime)}
                       </span>
-                      <p className="text-gray-700 flex-1">
+                      <p className="text-gray-700 flex-1 text-right">
                         {segment.text}
                       </p>
                     </div>
