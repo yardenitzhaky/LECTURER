@@ -143,7 +143,7 @@ class TranscriptionService:
                 # This simulates the segmentation that Whisper would provide
                 # Each segment will be approximately 30 seconds (as a rough estimate)
                 if duration > 60:  # Only segment if longer than 1 minute
-                    segment_duration = 30  # 30 seconds per segment
+                    segment_duration = 15 # 30 seconds per segment
                     num_segments = max(1, int(duration / segment_duration))
                     
                     # Roughly divide the text into segments

@@ -2,35 +2,33 @@
 import logging
 from openai import OpenAI, AsyncOpenAI
 from app.core.config import settings
-import httpx  # <--- Import httpx
+import httpx
 
 logger = logging.getLogger(__name__)
 
 class SummarizationService:
     def __init__(self):
-        self.client: AsyncOpenAI | None = None  # Initialize client to None with type hint
+        self.client: AsyncOpenAI | None = None 
         if not settings.openai_api_key or settings.openai_api_key == "YOUR_OPENAI_API_KEY":
             logger.warning("OpenAI API Key not configured. Summarization will be skipped.")
         else:
             try:
                 # 1. Explicitly create an httpx.AsyncClient instance
-                #    We are NOT passing the 'proxies' argument here.
-                #    We can set a reasonable default timeout.
                 custom_http_client = httpx.AsyncClient(
-                    timeout=httpx.Timeout(60.0, connect=5.0) # Example: 60s overall, 5s connect
+                    timeout=httpx.Timeout(60.0, connect=5.0) 
                 )
                 logger.info("Custom httpx.AsyncClient created.")
 
                 # 2. Pass this pre-configured client to AsyncOpenAI
                 self.client = AsyncOpenAI(
                     api_key=settings.openai_api_key,
-                    http_client=custom_http_client # <--- Pass the instance here
+                    http_client=custom_http_client
                 )
                 logger.info("AsyncOpenAI client initialized successfully using custom httpx client.")
 
             except Exception as e:
                 logger.error(f"Failed to initialize OpenAI client: {e}", exc_info=True)
-                self.client = None # Ensure client is None if initialization fails
+                self.client = None 
 
     async def summarize_text(self, text: str, max_length: int = 75) -> str | None:
         """
@@ -69,8 +67,8 @@ class SummarizationService:
                     {"role": "system", "content": "You are a helpful assistant skilled in summarizing lecture content."},
                     {"role": "user", "content": prompt}
                 ],
-                temperature=0.5,
-                max_tokens=300,
+                temperature=0.6,
+                max_tokens=350,
                 n=1,
                 stop=None,
             )
