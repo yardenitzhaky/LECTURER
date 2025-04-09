@@ -1,61 +1,3 @@
-# ✨ NoteLecture.AI
-
-**NoteLecture.AI** is an intelligent web application designed to automatically process lecture recordings and presentations, synchronizing spoken content with the corresponding slides. Upload your video (local file or URL) and presentation (PPTX/PDF), and get back an interactive, searchable lecture experience.
-*(Live Demo Not Available Yet, SOON WILL BE DEPLOYED)*
-
-
-<details>
-<summary>📱 Screenshots</summary>
-
-**Homepage:**
-![Homepage Screenshot](screenshots/Screenshot%202025-04-06%20at%2012.16.49.png)
-
-**Upload Interface:**
-![Upload Interface Screenshot](screenshots/Screenshot%202025-04-06%20at%2012.17.19.png)
-
-**Lecture Loading State (Processing):**
-![Lecture Loading Screenshot](screenshots/Screenshot%202025-04-09%20at%2017.01.11.png)
-
-**Lecture View Interface (Completed):**
-![Lecture View Screenshot](screenshots/Screenshot%202025-04-09%20at%2017.01.53.png) {/* <<< CORRECTED FILENAME HERE */}
-
-</details>
-
-<details>
-<summary> 🚀 Features</summary>
-
-### Core Functionality
-*   📹 **Flexible Video Input:** Upload local video files or provide URLs (YouTube, Zoom recordings, etc., processed via `yt-dlp`).
-*   📄 **Presentation Support:** Accepts presentation files in `.pptx` and `.pdf` formats.
-*   🔊 **Automatic Audio Extraction:** Seamlessly extracts audio tracks from video inputs using `moviepy`.
-
-### Intelligent Processing & Synchronization
-*   🤖 **AI-Powered Transcription:** Leverages the [IVRIT.AI API](https://hebrew-ai.com/) for accurate audio-to-text transcription (specialized for Hebrew).
-*   🖼️ **Slide Image Extraction:** Converts presentation slides/pages into individual images using `PyMuPDF` and `python-pptx`.
-*   💡 **Advanced Slide Matching:** Employs computer vision (OpenCV) to analyze video frames and synchronize them with the correct presentation slide using techniques like:
-    *   ORB Feature Matching 
-    *   BRISK Feature Matching
-    *   SIFT Feature Matching
-    *   Template Matching 
-*   ⏱️ **Timestamped Synchronization:** Precisely maps transcribed text segments to the corresponding slide based on timing in the video.
-</details>
-
-## 🔧 Tech Stack
-
-### Backend
-- **Framework:** FastAPI (Python)
-- **Database:** MySQL
-- **Transcription Service:** IVRIT.AI
-- **Video Processing:** OpenCV, MoviePy, yt-dlp
-- **Document Processing:** PyMuPDF, python-pptx
-
-### Frontend
-- **Framework:** React.JS with TypeScript
-- **Styling:** Tailwind CSS
-- **Routing:** React Router
-- **HTTP Client:** Axios
-- **Icons:** Lucide React
-
 # ✨ NoteLecture.AI ✨
 
 NoteLecture.AI is an intelligent web application designed to automatically process lecture recordings and presentations. It transcribes the audio, synchronizes the spoken content with the corresponding presentation slides, and provides an interactive, searchable, and summarizable lecture experience.
@@ -76,8 +18,12 @@ NoteLecture.AI is an intelligent web application designed to automatically proce
 **Upload Interface:**
 ![Upload Interface Screenshot](screenshots/Screenshot%202025-04-06%20at%2012.17.19.png)
 
-**Lecture View Interface:**
-![Lecture View Screenshot](screenshots/Screenshot%202025-04-06%20at%2013.12.56.png)
+**Lecture Loading State (Processing):**
+![Lecture Loading Screenshot](screenshots/Screenshot%202025-04-09%20at%2017.01.11.png)
+
+**Lecture View Interface (Completed):**
+![Lecture View Screenshot](screenshots/Screenshot%202025-04-09%20at%2017.01.53.png) {/* <<< CORRECTED FILENAME HERE */}
+
 </details>
 
 ---
@@ -139,4 +85,4 @@ NoteLecture.AI is an intelligent web application designed to automatically proce
 ---
 
 
-*Created by Yarden Itzhaky* ([Portfolio](https://yardenitzhaky.github.io/Portfolio/) | [LinkedIn](https://www.linkedin.com/in/yardenitzhaky) | [GitHub](https://github.com/yardenitzhaky))*
+*Created by Yarden Itzhaky* ([Portfolio](https://yardenitzhaky.github.io/Portfolio/) | [LinkedIn](https://www.linkedin.com/in/yardenitzhaky) | [GitHub](https://github.com/yardenitzhaky))
