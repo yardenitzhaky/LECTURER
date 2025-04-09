@@ -3,12 +3,22 @@
 **NoteLecture.AI** is an intelligent web application designed to automatically process lecture recordings and presentations, synchronizing spoken content with the corresponding slides. Upload your video (local file or URL) and presentation (PPTX/PDF), and get back an interactive, searchable lecture experience.
 *(Live Demo Not Available Yet, SOON WILL BE DEPLOYED)*
 
-<details>
-<summary> 📱 Screenshots</summary>
 
-![Homepage](screenshots/Screenshot%202025-04-06%20at%2012.16.49.png)
-![Upload Interface](screenshots/Screenshot%202025-04-06%20at%2012.17.19.png)
-![Lecture View](screenshots/Screenshot%202025-04-06%20at%2013.12.56.png)
+<details>
+<summary>📱 Screenshots</summary>
+
+**Homepage:**
+![Homepage Screenshot](screenshots/Screenshot%202025-04-06%20at%2012.16.49.png)
+
+**Upload Interface:**
+![Upload Interface Screenshot](screenshots/Screenshot%202025-04-06%20at%2012.17.19.png)
+
+**Lecture Loading State (Processing):**
+![Lecture Loading Screenshot](screenshots/Screenshot%202025-04-09%20at%2017.01.11.png)
+
+**Lecture View Interface (Completed):**
+![Lecture View Screenshot](screenshots/Screenshot%202025-04-09%20at%2017.01.53.png) {/* <<< CORRECTED FILENAME HERE */}
+
 </details>
 
 <details>
