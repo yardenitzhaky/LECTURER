@@ -22,7 +22,7 @@ class TranscriptionService:
             "Authorization": f"Bearer {self.api_key}"
         }
         # How often to poll for status (in seconds)
-        self.polling_interval = 7
+        self.polling_interval = 12
         # Maximum polling attempts (adjust as needed)
         self.max_polling_attempts = 105 
 
