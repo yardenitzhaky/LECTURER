@@ -28,11 +28,10 @@ class Slide(Base):
     __tablename__ = "slides" # Explicitly define table name
 
     id = Column(Integer, primary_key=True, index=True)
-    # Ensure ForeignKey points to the EXPLICIT table name 'lectures.id'
     lecture_id = Column(Integer, ForeignKey("lectures.id"), nullable=False)
     index = Column(Integer, nullable=False)
-    # IMPORTANT: Use Text for base64 data, not String(255)
     image_data = Column(Text)
+    summary = Column(Text, nullable=True)
 
     # Relationships
     lecture = relationship("Lecture", back_populates="slides")

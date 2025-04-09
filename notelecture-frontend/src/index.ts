@@ -11,6 +11,7 @@ export interface TranscriptionSegment {
 export interface Slide {
   imageUrl: string;
   index: number;
+  summary?: string;
 }
 
 export interface Lecture {
@@ -28,4 +29,10 @@ export interface UploadResponse {
 
 export interface APIError {
   detail: string;
+}
+
+
+export interface SummarizeResponse {
+  summary: string | null;
+  message?: string; // Optional message for cases like "no text"
 }
