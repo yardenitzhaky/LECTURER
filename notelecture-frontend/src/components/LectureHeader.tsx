@@ -4,7 +4,7 @@ import { ChevronLeft, ChevronRight, RefreshCw, Loader2 } from 'lucide-react';
 
 interface LectureHeaderProps {
     title: string;
-    status: string;
+    status: string; // Keep receiving the specific status string
     currentSlideIndex: number;
     totalSlides: number;
     onPrev: () => void;
@@ -13,28 +13,76 @@ interface LectureHeaderProps {
     isRefreshing: boolean;
 }
 
-// Internal Status Badge Logic (or could be a separate util function if preferred)
+// Internal Status Badge Logic - Enhanced
 const renderStatusBadge = (status: string) => {
-     switch (status) {
+    let text = status;
+    let bgColor = 'bg-gray-100';
+    let textColor = 'text-gray-800';
+    let showLoader = false;
+
+    switch (status) {
         case 'completed':
-            return <span className="ml-2 px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">Completed</span>;
+            text = 'Completed';
+            bgColor = 'bg-green-100';
+            textColor = 'text-green-800';
+            break;
         case 'failed':
-            return <span className="ml-2 px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800">Failed</span>;
+            text = 'Failed';
+            bgColor = 'bg-red-100';
+            textColor = 'text-red-800';
+            break;
         case 'pending':
-        case 'processing':
+            text = 'Pending...';
+            bgColor = 'bg-yellow-100';
+            textColor = 'text-yellow-800';
+            showLoader = true;
+            break;
+        case 'processing': // Generic processing
         case 'processing_slides':
+             text = 'Processing Slides...';
+             bgColor = 'bg-yellow-100';
+             textColor = 'text-yellow-800';
+             showLoader = true;
+             break;
         case 'downloading':
+            text = 'Downloading Video...';
+            bgColor = 'bg-yellow-100';
+            textColor = 'text-yellow-800';
+            showLoader = true;
+            break;
         case 'transcribing':
+            text = 'Transcribing...';
+            bgColor = 'bg-yellow-100';
+            textColor = 'text-yellow-800';
+            showLoader = true;
+            break;
         case 'matching':
+            text = 'Matching Slides...';
+            bgColor = 'bg-yellow-100';
+            textColor = 'text-yellow-800';
+            showLoader = true;
+            break;
         case 'saving_segments':
-             return (
-                <span className="ml-2 px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800 flex items-center">
-                    <Loader2 className="w-3 h-3 animate-spin mr-1"/> Processing...
-                </span>
-             );
+            text = 'Saving...';
+            bgColor = 'bg-yellow-100';
+            textColor = 'text-yellow-800';
+            showLoader = true;
+            break;
         default:
-            return <span className="ml-2 px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800">{status}</span>;
+            // Keep original status text if unknown
+            text = status;
+            break;
     }
+
+    return (
+        <span
+            className={`ml-2 px-2 py-0.5 rounded text-xs font-medium inline-flex items-center ${bgColor} ${textColor}`}
+            title={`Current status: ${status}`} // Tooltip shows raw status
+        >
+            {showLoader && <Loader2 className="w-3 h-3 animate-spin mr-1"/>}
+            {text}
+        </span>
+    );
 };
 
 /**
@@ -57,7 +105,7 @@ export const LectureHeader: React.FC<LectureHeaderProps> = ({
             {/* Previous Button */}
             <button
                 onClick={onPrev}
-                disabled={currentSlideIndex === 0}
+                disabled={currentSlideIndex === 0 || isRefreshing} // Disable nav during refresh
                 aria-label="Previous Slide"
                 className="p-2 rounded-full text-gray-700 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             >
@@ -73,7 +121,8 @@ export const LectureHeader: React.FC<LectureHeaderProps> = ({
                     <span className="text-sm text-gray-500">
                         Slide {currentSlideIndex + 1} of {totalSlides}
                     </span>
-                    {renderStatusBadge(status)} {/* Use internal function */}
+                    {renderStatusBadge(status)} {/* Use enhanced function */}
+                    {/* Refresh button only shown when processing, not during an active refresh action */}
                     {isProcessing && (
                         <button
                             onClick={onRefresh}
@@ -90,7 +139,7 @@ export const LectureHeader: React.FC<LectureHeaderProps> = ({
             {/* Next Button */}
             <button
                 onClick={onNext}
-                disabled={currentSlideIndex >= totalSlides - 1}
+                disabled={currentSlideIndex >= totalSlides - 1 || isRefreshing} // Disable nav during refresh
                 aria-label="Next Slide"
                 className="p-2 rounded-full text-gray-700 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             >

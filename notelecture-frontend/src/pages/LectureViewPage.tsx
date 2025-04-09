@@ -1,12 +1,13 @@
 // src/pages/LectureViewPage.tsx
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react'; // Import useRef, useEffect, useCallback
 import { useParams, useNavigate } from 'react-router-dom';
 import { Home, AlertTriangle, Loader2 } from 'lucide-react';
 import { APIService } from '../api';
 import { useLectureData } from './useLectureData'; // Custom hook for data logic
 import { LectureHeader } from '../components/LectureHeader'; // Component 2
 import { LectureContent } from '../components/LectureContent'; // Component 3
-// Assuming Lecture type is imported via '../index'
+
+const DEBOUNCE_DELAY_MS = 750; // Debounce time for refresh button
 
 /**
  * Main page component for viewing a processed lecture. (Component 1 of 3)
@@ -15,30 +16,54 @@ const LectureViewPage: React.FC = () => {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
 
-    // Hook manages: lecture, isLoading, isRefreshing, error, refetch
     const { lecture, isLoading, isRefreshing, error, refetch } = useLectureData(id);
 
-    // State specific to the page's orchestration logic
     const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
     const [isSummarizing, setIsSummarizing] = useState<boolean>(false);
     const [summaryError, setSummaryError] = useState<string>('');
 
-    // --- Event Handlers ---
+    // Ref for debounce timeout
+    const debounceTimeoutRef = useRef<number | null>(null);
+
+    // Cleanup debounce timer on unmount
+    useEffect(() => {
+        return () => {
+            if (debounceTimeoutRef.current) {
+                clearTimeout(debounceTimeoutRef.current);
+            }
+        };
+    }, []);
+
+    // Debounced refresh handler
+    const handleDebouncedRefresh = useCallback(() => {
+        if (isRefreshing) return; // Don't queue another refresh if one is in progress
+
+        if (debounceTimeoutRef.current) {
+            clearTimeout(debounceTimeoutRef.current);
+        }
+        debounceTimeoutRef.current = window.setTimeout(() => {
+            console.log('Executing debounced refresh...');
+            refetch();
+        }, DEBOUNCE_DELAY_MS);
+        console.log('Refresh debounced...'); // Log that debounce is active
+    }, [refetch, isRefreshing]); // Depend on refetch and isRefreshing
+
+
     const handlePreviousSlide = () => {
+        if (isRefreshing) return; // Prevent navigation during refresh
         setCurrentSlideIndex((prev) => Math.max(0, prev - 1));
-        setSummaryError(''); // Clear summary error on navigation
+        setSummaryError('');
     };
 
     const handleNextSlide = () => {
-        // Ensure lecture and slides exist before trying to access length
+        if (isRefreshing) return; // Prevent navigation during refresh
         if (lecture?.slides) {
             setCurrentSlideIndex((prev) => Math.min(lecture.slides.length - 1, prev + 1));
-            setSummaryError(''); // Clear summary error on navigation
+            setSummaryError('');
         }
     };
 
     const handleSummarizeClick = async () => {
-        // Check conditions before proceeding
         const currentSlideExists = lecture?.slides?.[currentSlideIndex];
         if (!id || lecture?.status !== 'completed' || isSummarizing || !currentSlideExists) {
             console.warn("Summarization blocked:", { id, status: lecture?.status, isSummarizing, currentSlideExists });
@@ -46,14 +71,11 @@ const LectureViewPage: React.FC = () => {
         }
 
         setIsSummarizing(true);
-        setSummaryError(''); // Clear previous summary error
+        setSummaryError('');
 
         try {
             const result = await APIService.summarizeSlide(id, currentSlideIndex);
-            // Refetch the entire lecture data to ensure consistency, especially with summary updates
-            await refetch();
-
-            // Optionally, show a message if the API indicates no summary was possible (e.g., no text)
+            await refetch(); // Refetch data after summarizing
             if (result.summary === null && result.message) {
                  setSummaryError(result.message);
             }
@@ -61,12 +83,13 @@ const LectureViewPage: React.FC = () => {
             console.error("Summarization API call failed:", err);
             setSummaryError(err instanceof Error ? err.message : "An unknown error occurred during summarization.");
         } finally {
-            setIsSummarizing(false); // Ensure loading state is turned off
+            setIsSummarizing(false);
         }
     };
 
-    // --- Conditional Rendering for Loading/Error/NoData States ---
+    // --- Conditional Rendering ---
     if (isLoading) {
+        // ... loading state ...
         return (
             <div className="min-h-[calc(100vh-8rem)] flex flex-col items-center justify-center text-gray-600">
                 <Loader2 className="h-12 w-12 animate-spin text-blue-600 mb-4" />
@@ -76,7 +99,8 @@ const LectureViewPage: React.FC = () => {
     }
 
     if (error) {
-        return (
+        // ... error state ...
+         return (
             <div className="min-h-[calc(100vh-8rem)] flex flex-col items-center justify-center text-red-600 bg-red-50 p-6 rounded-lg shadow max-w-md mx-auto">
                 <AlertTriangle className="h-12 w-12 text-red-500 mb-4" />
                 <p className="text-lg font-semibold mb-2">Error Loading Lecture</p>
@@ -88,11 +112,11 @@ const LectureViewPage: React.FC = () => {
         );
     }
 
-    // Handle case where loading is finished but lecture data is still null
     if (!lecture) {
-        return (
+        // ... no lecture data state ...
+         return (
             <div className="min-h-[calc(100vh-8rem)] flex flex-col items-center justify-center text-gray-500">
-                <p>No lecture data found.</p>
+                <p>No lecture data found for this ID.</p>
                  <button onClick={() => navigate('/')} className="mt-4 px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 flex items-center">
                     <Home className="w-4 h-4 mr-2" /> Go Home
                 </button>
@@ -103,10 +127,8 @@ const LectureViewPage: React.FC = () => {
     // --- Render Main Lecture View ---
     return (
         <div className="min-h-[calc(100vh-8rem)] flex flex-col bg-gray-50 p-4 md:p-6">
-            {/* Max width container */}
             <div className="max-w-7xl mx-auto w-full space-y-4 flex-grow flex flex-col">
-
-                {/* Component 2: Header/Controls */}
+                {/* Pass the debounced handler to the header */}
                 <LectureHeader
                     title={lecture.title}
                     status={lecture.status}
@@ -114,11 +136,10 @@ const LectureViewPage: React.FC = () => {
                     totalSlides={lecture.slides.length}
                     onPrev={handlePreviousSlide}
                     onNext={handleNextSlide}
-                    onRefresh={refetch} // Pass the refetch function from the hook
+                    onRefresh={handleDebouncedRefresh} // Use debounced handler
                     isRefreshing={isRefreshing}
                 />
 
-                {/* Component 3: Main Content Display */}
                 <LectureContent
                     currentSlide={lecture.slides[currentSlideIndex]}
                     allSegments={lecture.transcription}
@@ -128,11 +149,9 @@ const LectureViewPage: React.FC = () => {
                     summaryError={summaryError}
                     onSummarize={handleSummarizeClick}
                 />
-
-            </div> {/* End Max Width Container */}
-        </div> // End Page Container
+            </div>
+        </div>
     );
 };
 
 export default LectureViewPage;
-
