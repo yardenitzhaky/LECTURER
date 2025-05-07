@@ -1,16 +1,18 @@
 # app/db/models.py
-from sqlalchemy import Column, Integer, String, Float, ForeignKey, Text 
+from sqlalchemy import Column, Integer, String, Float, ForeignKey, Text
 from sqlalchemy.orm import relationship
+from sqlalchemy.dialects.mysql import MEDIUMTEXT, LONGTEXT
+
 from app.db.base_class import Base
 
 class Lecture(Base):
-    __tablename__ = "lectures" 
+    __tablename__ = "lectures"
 
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String(255))
     status = Column(String(50), index=True)
-    video_path = Column(Text) 
-    presentation_path = Column(String(255)) 
+    video_path = Column(Text)
+    presentation_path = Column(String(255)) # This field is not used, consider removing or implementing it
 
     transcription_segments = relationship(
         "TranscriptionSegment",
@@ -24,24 +26,28 @@ class Lecture(Base):
     )
 
 class Slide(Base):
-    __tablename__ = "slides" 
+    __tablename__ = "slides"
 
     id = Column(Integer, primary_key=True, index=True)
     lecture_id = Column(Integer, ForeignKey("lectures.id"), nullable=False)
     index = Column(Integer, nullable=False)
-    image_data = Column(Text)
+    image_data = Column(MEDIUMTEXT) # Use the imported type directly
+    # If you need even more space, use LONGTEXT:
+    # image_data = Column(LONGTEXT)
+
+
     summary = Column(Text, nullable=True)
 
     lecture = relationship("Lecture", back_populates="slides")
 
 class TranscriptionSegment(Base):
-    __tablename__ = "transcription_segments" 
+    __tablename__ = "transcription_segments"
 
     id = Column(Integer, primary_key=True, index=True)
     lecture_id = Column(Integer, ForeignKey("lectures.id"), nullable=False)
     start_time = Column(Float, index=True)
     end_time = Column(Float)
-    text = Column(Text) 
+    text = Column(Text)
     confidence = Column(Float)
     slide_index = Column(Integer, nullable=False, default=0, index=True)
 
