@@ -18,30 +18,6 @@
 
 ---
 
-## ⚙️ Features
-
-### Input & Processing
-
-* 🎥 Upload videos or use links (YouTube, Zoom)
-* 📑 Accepts PDFs and PPTX slides
-* 🔉 Audio extracted via `moviepy` or `yt-dlp`
-* 🖼 Slide images created using `PyMuPDF`
-
-### AI & Matching
-
-* 🗣 Accurate Hebrew transcription (IVRIT.AI)
-* 🧠 OpenCV matches slides with video frames
-* ⏱ Aligns transcript to slides with timestamps
-* ✍️ Optional AI-generated slide summaries (OpenAI)
-
-### User Interface
-
-* 🖥 Split-screen view: slides + synced transcript
-* 📊 Real-time processing status
-* 🧾 Slide-by-slide summarization after sync
-
----
-
 ## 🧰 Tech Stack
 
 ### Backend
