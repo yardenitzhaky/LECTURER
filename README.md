@@ -110,7 +110,9 @@ npm run dev
 ## 🙌 Credits
 
 Created by **Yarden Itzhaky**
+
 Supervised by **Prof. Roei Porat**
+
 Developed as part of a Computer Science project at **University of Haifa**
 
 [Portfolio](https://yardenitzhaky.github.io/Portfolio/) · [LinkedIn](https://linkedin.com/in/yardenitzhaky) · [GitHub](https://github.com/yardenitzhaky)
