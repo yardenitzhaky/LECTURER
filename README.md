@@ -56,7 +56,7 @@ cd LECTURER
 ```bash
 cd notelecture-backend
 python3.11 -m venv .venv
-source .venv/bin/activate
+source .venv/bin/activate # On Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
