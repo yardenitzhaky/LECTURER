@@ -13,11 +13,13 @@ class Settings(BaseSettings):
     PROJECT_NAME: str  
     BACKEND_CORS_ORIGINS: List[str]  
     DATABASE_URL: str
+    UPLOADS_DIR: str
     
     # Authentication related settings
     SECRET_KEY: str  # Secret key used for token signing
     ALGORITHM: str  # Algorithm used for JWT token encoding (usually HS256)
     ACCESS_TOKEN_EXPIRE_MINUTES: int  # Token expiration time in minutes
+    openai_api_key: Optional[str] = None  # OpenAI API key for external service
     
     # AWS credentials for S3 or other AWS services
     aws_access_key_id: Optional[str] = None  # AWS access key for API authentication
