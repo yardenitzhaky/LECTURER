@@ -20,11 +20,6 @@ class Settings(BaseSettings):
     ALGORITHM: str  # Algorithm used for JWT token encoding (usually HS256)
     ACCESS_TOKEN_EXPIRE_MINUTES: int  # Token expiration time in minutes
     openai_api_key: Optional[str] = None  # OpenAI API key for external service
-    
-    # AWS credentials for S3 or other AWS services
-    aws_access_key_id: Optional[str] = None  # AWS access key for API authentication
-    aws_secret_access_key: Optional[str] = None  # AWS secret key for API authentication
-    aws_default_region: Optional[str] = None  # Default AWS region for services
     ivrit_ai_api_key: Optional[str] = None  # API key for IVRIT.AI transcription service
 
     class Config:
