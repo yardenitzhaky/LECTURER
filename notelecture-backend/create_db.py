@@ -1,33 +1,23 @@
 import logging
 import sys
 import os
-# Correct imports for SQLAlchemy 2.x URL handling
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import OperationalError, ProgrammingError
-# Import URL type and make_url function
 from sqlalchemy.engine.url import make_url, URL # Import URL type as well
 
-# Ensure app package is discoverable if running from outside app directory
-# Get the directory where this script is located
 current_dir = os.path.dirname(os.path.abspath(__file__))
-# Get the project root directory (up one level from notelecture-backend)
 project_root = os.path.abspath(os.path.join(current_dir, os.pardir))
-# Add the project root directory to the Python path to allow importing 'app'
 sys.path.insert(0, project_root)
 
-
-# Now we can import from `app`
 try:
     from app.db.base_class import Base
-    from app.db.session import engine # We'll still use this engine for create_all
-    # Importing models ensures they are registered with Base.metadata
-    from app.db import Lecture, Slide, TranscriptionSegment # Keep importing models
-    from app.core.config import settings # Needed for DATABASE_URL
+    from app.db.session import engine 
+    from app.db import Lecture, Slide, TranscriptionSegment 
+    from app.core.config import settings
 except ImportError as e:
     logging.error(f"Failed to import application modules. Ensure you are running this script from the 'notelecture-backend' directory or that '{project_root}' is in your PYTHONPATH.")
     logging.error(f"ImportError: {e}")
     sys.exit(1) # Exit if imports fail
-
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)-8s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -51,14 +41,10 @@ def create_database_if_not_exists(database_url: str):
         logger.error("DATABASE_URL does not specify a database name. Cannot create database.")
         sys.exit(1)
 
-    # Construct a new URL object without the database name for connecting to the server
-    # Convert the original URL to a dictionary, remove the 'database' key
-    # then pass the dictionary to the URL constructor.
     url_dict = url.translate_connect_args() # Gets connection arguments as a dict
     url_dict.pop('database', None) # Remove the database key if it exists
 
-    # Reconstruct the URL for the server connection
-    # Use the scheme and authority (host, port, username, password) from the original URL
+
     server_url = URL.create(
         drivername=url.drivername,
         username=url.username,
@@ -73,12 +59,8 @@ def create_database_if_not_exists(database_url: str):
     server_url_masked = server_url.render_as_string(hide_password=True)
     logger.info(f"Attempting to connect to MySQL server using {server_url_masked} to create database '{db_name}'...")
 
-    # Create a temporary engine for the connection without the target database
-    # Use a small pool size as this is short-lived
     temp_engine = None
     try:
-        # It's crucial that the user in the URL has permissions to connect
-        # *without* a default database and to CREATE DATABASE. Root usually does.
         temp_engine = create_engine(server_url, pool_size=2, max_overflow=0)
 
         # Connect and execute the CREATE DATABASE command
@@ -114,7 +96,6 @@ def create_database_if_not_exists(database_url: str):
              temp_engine.dispose()
              logger.info("Temporary engine for database creation disposed.")
 
-
 def create_tables():
     """
     Ensures the database exists and then creates all tables
@@ -123,13 +104,9 @@ def create_tables():
     # Ensure the database exists first
     create_database_if_not_exists(settings.DATABASE_URL)
 
-    # Now that the database is confirmed to exist, use the primary engine
-    # configured to connect to that specific database to create the tables.
+
     logger.info(f"Attempting to create tables in database '{engine.url.database}' using the main engine...")
     try:
-        # This command looks at the Base.metadata object, finds all tables
-        # associated with it (by importing your models), and issues CREATE TABLE
-        # statements for any tables that do not already exist in the target database
         Base.metadata.create_all(bind=engine)
         logger.info("Database tables creation process completed.")
         logger.info("If no errors were reported above after 'Database tables creation process completed.', tables were likely created successfully.")
