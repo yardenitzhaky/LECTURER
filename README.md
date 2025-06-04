@@ -111,7 +111,7 @@ npm run dev
 
 Created by **Yarden Itzhaky**
 
-Supervised by **Prof. Roei Porat**
+Supervised by **Prof. Roi Poranne**
 
 Developed as part of a Computer Science project at **University of Haifa**
 
