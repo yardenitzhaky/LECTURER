@@ -1,22 +1,43 @@
-# Environment files
+# =============================================================================
+# NoteLecture.AI - Comprehensive .gitignore
+# =============================================================================
+# This file contains ignore patterns for the entire NoteLecture.AI project,
+# covering both backend (Python/FastAPI) and frontend (React/TypeScript).
+
+# =============================================================================
+# Environment Variables & Configuration
+# =============================================================================
+# Environment files containing secrets and configuration
 .env
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
+.env.test
 
-# Python virtual environments
+# =============================================================================
+# Python Backend (FastAPI, SQLAlchemy)
+# =============================================================================
+# Virtual environments (various naming conventions)
 .venv/
 venv/
 env/
 ENV/
+myenv/
+*/.venv/
 
 # Python cache and compiled files
 __pycache__/
 *.py[cod]
 *$py.class
+*.pyc
+*.pyo
+*.pyd
 *.so
+*.dylib
 .Python
+
+# Python packaging and distribution
 build/
 develop-eggs/
 dist/
@@ -33,91 +54,146 @@ wheels/
 .installed.cfg
 *.egg
 
-# Node.js
+# Python testing and coverage
+.pytest_cache/
+.coverage
+.ipynb_checkpoints
+
+# =============================================================================
+# Node.js Frontend (React, TypeScript, Vite)
+# =============================================================================
+# Dependencies
 node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-.pnpm-debug.log*
+jspm_packages/
 
 # Build outputs
 /dist
 /build
+dist-ssr
 *.tsbuildinfo
 
-# IDE and editor files
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# OS generated files
-.DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
-Thumbs.db
-
-# Logs
-logs
-*.log
+# Package manager logs
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-pnpm-debug.log*
+.pnpm-debug.log*
 lerna-debug.log*
 
-# Database
+# Package manager files
+.npm
+.yarn-integrity
+*.tgz
+
+# Vite specific
+.cache
+.parcel-cache
+
+# Framework build outputs
+.next          # Next.js
+.nuxt          # Nuxt.js
+.vuepress/dist # VuePress
+
+# =============================================================================
+# IDE and Editor Files
+# =============================================================================
+# VSCode (keep extensions.json for project setup)
+.vscode/*
+!.vscode/extensions.json
+
+# IntelliJ IDEA / WebStorm
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# Other editors
+*.swp
+*.swo
+*.sw?
+*~
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+
+# =============================================================================
+# Operating System Files
+# =============================================================================
+# macOS
+.DS_Store
+.DS_Store?
+._*
+.AppleDouble
+.LSOverride
+.Spotlight-V100
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+.DocumentRevisions-V100
+.fseventsd
+.TemporaryItems
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
+
+# Windows
+Thumbs.db
+ehthumbs.db
+ehthumbs_vista.db
+Desktop.ini
+
+# =============================================================================
+# Logs and Debugging
+# =============================================================================
+logs/
+logs
+*.log
+
+# =============================================================================
+# Databases
+# =============================================================================
+# SQLite databases (development/testing)
 *.db
 *.sqlite
 *.sqlite3
 
-# Uploads and temporary files
+# =============================================================================
+# Media and Upload Files
+# =============================================================================
+# Lecture media files (videos, audio)
+*.mp4
+*.wav
+*.mp3
+
+# Presentation files (will be processed and stored in DB)
+*.pptx
+*.ppt
+
+# Upload directory for user files
 uploads/
+
+# =============================================================================
+# Temporary Files
+# =============================================================================
 tmp/
 temp/
 *.tmp
+*.bak
 
-# Coverage reports
+# =============================================================================
+# Testing and Coverage
+# =============================================================================
 coverage/
 *.lcov
 .nyc_output/
+*.local
 
-# Dependency directories
-jspm_packages/
-
-# Optional npm cache directory
-.npm
-
-# Optional REPL history
-.node_repl_history
-
-# Output of 'npm pack'
-*.tgz
-
-# Yarn Integrity file
-.yarn-integrity
-
-# dotenv environment variables file
-.env.test
-
-# parcel-bundler cache (https://parceljs.org/)
-.cache
-.parcel-cache
-
-# next.js build output
-.next
-
-# nuxt.js build output
-.nuxt
-
-# vuepress build output
-.vuepress/dist
-
-# Serverless directories
+# =============================================================================
+# Other Build Tools and Frameworks
+# =============================================================================
+# Serverless framework
 .serverless
 
 # FuseBox cache
@@ -129,30 +205,11 @@ jspm_packages/
 # TernJS port file
 .tern-port
 
-# MacOS
-.AppleDouble
-.LSOverride
-
-# Thumbnails
-._*
-
-# Files that might appear in the root of a volume
-.DocumentRevisions-V100
-.fseventsd
-.Spotlight-V100
-.TemporaryItems
-.Trashes
-.VolumeIcon.icns
-.com.apple.timemachine.donotpresent
-
-# Directories potentially created on remote AFP share
-.AppleDB
-.AppleDesktop
-Network Trash Folder
-Temporary Items
-.apdisk
-
-# Project specific
-notelecture-backend/alembic.ini
-package.json
+# =============================================================================
+# Project Specific Exclusions
+# =============================================================================
+# Note: Removed project-specific exclusions that shouldn't be ignored:
+# - notelecture-backend/alembic.ini (needed for database migrations)
+# - package.json (needed for dependency management)
 CLAUDE.md
+notes
