@@ -79,6 +79,53 @@ export const LectureContent: React.FC<LectureContentProps> = ({
         }
     };
 
+    const handleCopyAllTranscription = async () => {
+        // Group all segments by slide index and create a formatted text
+        const segmentsBySlide = allSegments.reduce((acc, segment) => {
+            if (!acc[segment.slideIndex]) {
+                acc[segment.slideIndex] = [];
+            }
+            acc[segment.slideIndex].push(segment);
+            return acc;
+        }, {} as Record<number, TranscriptionSegment[]>);
+
+        const sortedSlideIndexes = Object.keys(segmentsBySlide).map(Number).sort((a, b) => a - b);
+        
+        const fullText = sortedSlideIndexes.map(slideIndex => {
+            const slideSegments = segmentsBySlide[slideIndex].sort((a, b) => a.startTime - b.startTime);
+            const slideText = slideSegments.map(segment => segment.text).join(' ');
+            return `שקופית ${slideIndex + 1}:\n${slideText}\n`;
+        }).join('\n');
+
+        if (!fullText.trim()) {
+            setCopyError('אין תמלול להעתקה');
+            setTimeout(() => setCopyError(''), 3000);
+            return;
+        }
+
+        try {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                await navigator.clipboard.writeText(fullText);
+            } else {
+                // Fallback for older browsers
+                const textArea = document.createElement('textarea');
+                textArea.value = fullText;
+                document.body.appendChild(textArea);
+                textArea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textArea);
+            }
+            
+            setIsCopied(true);
+            setCopyError('');
+            setTimeout(() => setIsCopied(false), 2000);
+        } catch (err) {
+            console.error('Failed to copy full text:', err);
+            setCopyError('שגיאה בהעתקה');
+            setTimeout(() => setCopyError(''), 3000);
+        }
+    };
+
     // --- Custom Prompt Functionality ---
     const handleCustomPromptSubmit = () => {
         if (!customPrompt.trim()) {
@@ -178,11 +225,34 @@ export const LectureContent: React.FC<LectureContentProps> = ({
                         תמלול שקופית {currentSlideIndex + 1}
                     </h2>
                     
-                    {/* Copy Button */}
+                    {/* Copy Buttons */}
                     <div className="flex items-center space-x-2">
                         {copyError && (
                             <span className="text-red-500 text-sm">{copyError}</span>
                         )}
+                        <button
+                            onClick={handleCopyAllTranscription}
+                            disabled={allSegments.length === 0 || isProcessingTranscription}
+                            className={`px-3 py-2 text-sm rounded-md flex items-center transition-all duration-200 ${
+                                isCopied 
+                                    ? 'bg-green-500 text-white'
+                                    : allSegments.length === 0 || isProcessingTranscription
+                                        ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                        : 'bg-purple-500 hover:bg-purple-600 text-white'
+                            }`}
+                        >
+                            {isCopied ? (
+                                <>
+                                    <Check className="w-4 h-4 mr-1" />
+                                    הועתק!
+                                </>
+                            ) : (
+                                <>
+                                    <Copy className="w-4 h-4 mr-1" />
+                                    העתק הכל
+                                </>
+                            )}
+                        </button>
                         <button
                             onClick={handleCopyTranscription}
                             disabled={slideTranscriptions.length === 0 || isProcessingTranscription}
@@ -202,7 +272,7 @@ export const LectureContent: React.FC<LectureContentProps> = ({
                             ) : (
                                 <>
                                     <Copy className="w-4 h-4 mr-1" />
-                                    העתק תמלול
+                                    העתק שקופית
                                 </>
                             )}
                         </button>
