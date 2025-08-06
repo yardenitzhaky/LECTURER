@@ -1,4 +1,0 @@
-delete all py cache directories - find . -type d -name "__pycache__" -exec rm -rf {} +
-activate venv - source venv/bin/activate   
-install requirements - pip install -r requirements.txt  
-start backend - uvicorn app.main:app --port 8000 --log-level debug  OR   uvicorn app.main:app --reload --port 8000 --reload-exclude="*/venv/*" --log-level debug

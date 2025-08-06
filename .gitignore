@@ -213,3 +213,6 @@ coverage/
 # - package.json (needed for dependency management)
 CLAUDE.md
 notes
+notes/
+*/notes/
+notelecture-backend/notes
