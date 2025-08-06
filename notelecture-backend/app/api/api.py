@@ -285,7 +285,7 @@ async def summarize_slide_endpoint(
         logger.warning(f"No text to summarize for L:{lecture_id} S:{slide_index}")
         return {"summary": None, "message": "No transcription text available for this slide."}
 
-    if not summarization_service.client:
+    if not summarization_service.llm:
          logger.error("Summarization service unavailable (likely no API key)")
          raise HTTPException(status_code=503, detail="Summarization service is not configured.")
 
