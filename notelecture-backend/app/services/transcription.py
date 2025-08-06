@@ -16,11 +16,13 @@ logger = logging.getLogger(__name__)
 
 class TranscriptionService:
     def __init__(self):
-        # IVRIT.AI API configuration from settings
+        # RunPod API configuration from settings
         from app.core.config import settings
-        self.api_key = settings.ivrit_ai_api_key
-        self.base_url = "https://hebrew-ai.com/api/transcribe"
+        self.api_key = settings.runpod_api_key
+        self.endpoint_id = settings.runpod_endpoint_id
+        self.base_url = f"https://api.runpod.ai/v2/{self.endpoint_id}" if self.endpoint_id else None
         self.headers = {
+            "Content-Type": "application/json",
             "Authorization": f"Bearer {self.api_key}"
         } if self.api_key else {} # Only include header if key exists
         # Use an AsyncClient instance for connection pooling
@@ -28,9 +30,9 @@ class TranscriptionService:
         self.http_client = httpx.AsyncClient(timeout=httpx.Timeout(180.0, connect=10.0)) # 3 minutes total, 10s connect
 
         # How often to poll for status (in seconds)
-        self.polling_interval = 12
+        self.polling_interval = 5
         # Maximum polling attempts (adjust as needed) - increased for longer audio
-        self.max_polling_attempts = 300 # Increased to ~1 hour max polling time
+        self.max_polling_attempts = 360 # Increased to ~30 minutes max polling time
 
     # --- Synchronous Helper for extract_audio ---
     def _sync_extract_audio(self, video_path: str, output_audio_path: str):
@@ -162,15 +164,24 @@ class TranscriptionService:
 
     async def transcribe(self, audio_path: str) -> Dict[str, Any]:
         """
-        Transcribe audio file using IVRIT.AI API and return detailed transcription.
+        Transcribe audio file using RunPod API and return detailed transcription.
         (Uses async HTTP calls and sleeps).
         """
         # --- ADD API KEY CHECK ---
-        if not self.api_key or self.api_key == "YOUR_IVRIT_AI_API_KEY":
-             logger.error("IVRIT.AI API Key is not configured or is placeholder.")
+        if not self.api_key or self.api_key == "YOUR_RUNPOD_API_KEY":
+             logger.error("RunPod API Key is not configured or is placeholder.")
              raise Exception("Transcription service API key is not configured.")
+        if not self.endpoint_id:
+             logger.error("RunPod endpoint ID is not configured.")
+             raise Exception("RunPod endpoint ID is not configured.")
+        if not self.base_url:
+             logger.error("RunPod base URL could not be constructed.")
+             raise Exception("RunPod endpoint configuration is incomplete.")
         if not self.headers: # Ensure headers are set if key was just loaded or became valid
-             self.headers = {"Authorization": f"Bearer {self.api_key}"}
+             self.headers = {
+                 "Content-Type": "application/json",
+                 "Authorization": f"Bearer {self.api_key}"
+             }
         # --- END API KEY CHECK ---
 
 
@@ -180,15 +191,12 @@ class TranscriptionService:
             if not os.access(audio_path, os.R_OK):
                 raise PermissionError(f"No permission to read audio file at: {audio_path}")
 
-            # File format check/conversion (keep sync for now, usually fast unless huge file)
-            # Consider checking file size here and raising a helpful error if too large for API?
+            # Step 1: Submit job to RunPod API (async)
+            job_id = await self._submit_runpod_job(audio_path)
+            logger.info(f"Job submitted successfully. RunPod Job ID: {job_id}")
 
-            # Step 1: Upload file to IVRIT.AI API (async)
-            transcription_id = await self._upload_file(audio_path)
-            logger.info(f"File uploaded successfully. Transcription ID: {transcription_id}")
-
-            # Step 2: Poll for transcription status (async)
-            transcription_result = await self._poll_transcription_status(transcription_id)
+            # Step 2: Poll for job status (async)
+            transcription_result = await self._poll_runpod_job_status(job_id)
 
             # Step 3: Process the result
             if transcription_result.get("success") and transcription_result.get("status") == "COMPLETED":
@@ -198,21 +206,69 @@ class TranscriptionService:
                 logger.info(f"Transcription completed (Lang: {language_used}). Text length: {len(full_text)}, Duration: {duration}s")
 
                 # *** Important: Re-evaluate Segmentation ***
-                # Check if the IVRIT.AI response contains actual segments with timestamps.
-                # If it does, parse *those* instead of the manual approximation below.
-                # Assuming for now it only returns full text and duration.
+                # Check if the RunPod response contains actual segments with timestamps.
+                # If it does, group them into 10-15 second chunks for better slide matching.
                 api_segments = transcription_result.get("segments") # Check if 'segments' key exists
-                if api_segments and isinstance(api_segments, list) and len(api_segments) > 0 and 'start_time' in api_segments[0]:
-                     logger.info(f"Received {len(api_segments)} segments directly from API. Using API segmentation.")
-                     processed_segments = [
-                         {
-                             "id": str(seg.get("id", i)), # Ensure ID is string
-                             "start_time": float(seg["start_time"]), # Ensure float
-                             "end_time": float(seg.get("end_time", seg["start_time"] + 1)) if seg.get("end_time") is not None else float(seg["start_time"] + 1), # Handle potential missing end_time, ensure float
-                             "text": seg.get("text", ""),
-                             "confidence": float(seg.get("confidence", 1.0)) # Ensure float
-                         } for i, seg in enumerate(api_segments) if seg.get('start_time') is not None
-                     ]
+                if api_segments and isinstance(api_segments, list) and len(api_segments) > 0 and 'start' in api_segments[0]:
+                     logger.info(f"Received {len(api_segments)} segments directly from API. Grouping into 10-15 second chunks.")
+                     
+                     # Group segments into 10-15 second chunks
+                     chunk_duration = 12.0  # Target 12 seconds per chunk
+                     processed_segments = []
+                     current_chunk_text = []
+                     current_chunk_start = None
+                     current_chunk_end = None
+                     chunk_id = 1
+                     
+                     for seg in api_segments:
+                         if seg.get('start') is None:
+                             continue
+                             
+                         seg_start = float(seg.get("start", 0))
+                         seg_end = float(seg.get("end", seg_start + 1))
+                         seg_text = seg.get("text", "").strip()
+                         
+                         if not seg_text:
+                             continue
+                         
+                         # Initialize first chunk
+                         if current_chunk_start is None:
+                             current_chunk_start = seg_start
+                             current_chunk_end = seg_end
+                             current_chunk_text.append(seg_text)
+                         # Check if adding this segment would exceed chunk duration
+                         elif (seg_end - current_chunk_start) <= chunk_duration:
+                             # Add to current chunk
+                             current_chunk_text.append(seg_text)
+                             current_chunk_end = seg_end
+                         else:
+                             # Save current chunk and start new one
+                             if current_chunk_text:
+                                 processed_segments.append({
+                                     "id": str(chunk_id),
+                                     "start_time": current_chunk_start,
+                                     "end_time": current_chunk_end,
+                                     "text": " ".join(current_chunk_text),
+                                     "confidence": 0.9  # High confidence for API segments
+                                 })
+                                 chunk_id += 1
+                             
+                             # Start new chunk with current segment
+                             current_chunk_start = seg_start
+                             current_chunk_end = seg_end
+                             current_chunk_text = [seg_text]
+                     
+                     # Don't forget the last chunk
+                     if current_chunk_text:
+                         processed_segments.append({
+                             "id": str(chunk_id),
+                             "start_time": current_chunk_start,
+                             "end_time": current_chunk_end,
+                             "text": " ".join(current_chunk_text),
+                             "confidence": 0.9
+                         })
+                     
+                     logger.info(f"Grouped {len(api_segments)} API segments into {len(processed_segments)} chunks of ~{chunk_duration}s each.")
                 else:
                      logger.warning("API did not provide detailed segments with timestamps. Approximating segmentation based on duration.")
                      # Keep the approximate segmentation logic as a fallback
@@ -268,142 +324,174 @@ class TranscriptionService:
             logger.error(f"Error during transcription process: {str(e)}", exc_info=True)
             raise
 
-    async def _upload_file(self, audio_path: str) -> str:
-        """Upload file to IVRIT.AI API using httpx and return transcription ID."""
+    async def _submit_runpod_job(self, audio_path: str) -> str:
+        """Submit transcription job to RunPod API and return job ID."""
         # Ensure headers include the API key
         if not self.headers:
-             logger.error("Attempted to upload file without API key headers.")
+             logger.error("Attempted to submit job without API key headers.")
              raise Exception("Transcription API key is missing.")
 
         try:
+            # Read audio file and encode to base64
             file_size = os.path.getsize(audio_path)
-            logger.info(f"Uploading file: {audio_path} (Size: {file_size} bytes)")
-            filename = os.path.basename(audio_path)
-            # Use a general audio content type, API should ideally detect format
-            content_type = 'audio/mpeg' # Or 'application/octet-stream' might be safer if format is unknown
-
+            logger.info(f"Preparing RunPod job for file: {audio_path} (Size: {file_size} bytes)")
+            
+            import base64
             async with aiofiles.open(audio_path, "rb") as audio_file:
-                files = {"file": (filename, await audio_file.read(), content_type)}
+                audio_content = await audio_file.read()
+                audio_base64 = base64.b64encode(audio_content).decode('utf-8')
 
-                # ADD LANGUAGE PARAMETER HERE
-                # The API error indicates 'language' is required.
-                # Assuming Hebrew ('HE') is the intended language based on project context.
-                data = {"language": "HE"}
-                # END ADD LANGUAGE PARAMETER
+            # Prepare RunPod job payload for IVRIT.AI template
+            job_payload = {
+                'input': {
+                    'transcribe_args': {
+                        'blob': audio_base64,  # Use 'blob' for base64 audio data
+                        'language': 'he'  # Hebrew language code (lowercase)
+                    }
+                }
+            }
 
+            url = f"{self.base_url}/run"
+            logger.info(f"Making async POST request to RunPod: {url}")
 
-                logger.info(f"Making async POST request to: {self.base_url} with language='HE'")
+            # Use the shared client instance
+            response = await self.http_client.post(
+                url,
+                headers=self.headers,
+                json=job_payload
+            )
 
-                # Use the shared client instance
-                response = await self.http_client.post(
-                    self.base_url,
-                    headers=self.headers,
-                    files=files,
-                    data=data # Pass the language data
-                )
+            logger.info(f"Response status code: {response.status_code}")
+            response_text = response.text
+            logger.info(f"Response content preview: {response_text[:500]}...") # Log more of response for debugging
 
-                logger.info(f"Response status code: {response.status_code}")
-                response_text = response.text
-                logger.info(f"Response content preview: {response_text[:500]}...") # Log more of response for debugging
+            response.raise_for_status() # Raises HTTPStatusError for 4xx/5xx
 
-                response.raise_for_status() # Raises HTTPStatusError for 4xx/5xx
-
-                data = response.json()
-                if data.get("success"):
-                    # --- CORRECTED KEY NAME HERE ---
-                    transcription_id = data.get("transcriptionId") # Use "transcriptionId"
-                    # --- END CORRECTED KEY NAME ---
-                    if not transcription_id:
-                         # This case should ideally not happen if success is true and ID exists,
-                         # but keeps the check in case API changes unexpectedly.
-                         raise Exception("API returned success=true but transcriptionId key was not found or value is empty.")
-                    return transcription_id
-                else:
-                    # Improved error message extraction from API response
-                    error_msg = "Unknown API error after upload (success=false)"
-                    if isinstance(data.get("error"), dict):
-                         # Try to get specific error message from nested structure
-                         error_msg = data["error"].get("language", [data["error"].get("message", error_msg)])[0] # Prioritize language error if present
-                    elif isinstance(data.get("error"), str):
-                         error_msg = data.get("error") # Sometimes it's a simple string
-
-                    logger.error(f"API returned success=false: {error_msg}")
-                    raise Exception(f"API error: {error_msg}")
+            data = response.json()
+            job_id = data.get("id")
+            if not job_id:
+                error_msg = data.get('error', 'Unknown error from RunPod API')
+                logger.error(f"RunPod API did not return job ID: {error_msg}")
+                raise Exception(f"RunPod API error: {error_msg}")
+            
+            logger.info(f"RunPod job submitted successfully with ID: {job_id}")
+            return job_id
 
         except httpx.HTTPStatusError as http_err:
-             error_detail = f"HTTP error during upload: {http_err.response.status_code}"
+             error_detail = f"HTTP error during RunPod job submission: {http_err.response.status_code}"
              try:
                   # Try to parse error body for more detail
                   err_data = http_err.response.json()
                   if 'error' in err_data:
-                       if isinstance(err_data['error'], str):
-                            error_detail += f" - Detail: {err_data['error']}"
-                       elif isinstance(err_data['error'], dict):
-                             # Handle nested dictionary errors like language error
-                             nested_errs = [f"{k}: {v}" for k, v in err_data['error'].items()]
-                             error_detail += f" - Detail: {'; '.join(nested_errs)}"
+                       error_detail += f" - Detail: {err_data['error']}"
                   elif 'detail' in err_data:
                        error_detail += f" - Detail: {err_data['detail']}"
              except Exception:
                   error_detail += f" - Body: {http_err.response.text[:200]}..." # Log raw body if JSON parse fails
 
              logger.error(error_detail)
-             # Raise specific exceptions based on status code if needed, otherwise raise a general exception
+             # Raise specific exceptions based on status code
              if http_err.response.status_code == 401 or http_err.response.status_code == 403:
-                  raise Exception("Authentication failed with transcription API. Check API key.") from http_err
+                  raise Exception("Authentication failed with RunPod API. Check API key.") from http_err
              elif http_err.response.status_code == 400:
-                  # The language error is a 400, but we now send language.
-                  # If we still get a 400, the error detail will be in the log.
-                  raise Exception(f"Bad request sent to transcription API: {error_detail}") from http_err
+                  raise Exception(f"Bad request sent to RunPod API: {error_detail}") from http_err
              else:
-                 raise Exception(f"HTTP error during upload: {http_err.response.status_code}") from http_err
+                 raise Exception(f"HTTP error during RunPod job submission: {http_err.response.status_code}") from http_err
 
         except httpx.RequestError as req_err: # Includes timeouts, connection errors
-            logger.error(f"Network error during upload: {str(req_err)}")
-            raise Exception(f"Network error communicating with IVRIT.AI API: {str(req_err)}") from req_err
+            logger.error(f"Network error during RunPod job submission: {str(req_err)}")
+            raise Exception(f"Network error communicating with RunPod API: {str(req_err)}") from req_err
         except Exception as e:
-            # Catch any other unexpected errors during the file upload logic itself
-            logger.error(f"Unexpected error during file upload preparation or initial API call: {str(e)}", exc_info=True)
+            # Catch any other unexpected errors during the job submission
+            logger.error(f"Unexpected error during RunPod job submission: {str(e)}", exc_info=True)
             raise
 
-    async def _poll_transcription_status(self, transcription_id: str) -> Dict[str, Any]:
-        """Poll for transcription status using httpx until completion or failure."""
+    async def _poll_runpod_job_status(self, job_id: str) -> Dict[str, Any]:
+        """Poll for RunPod job status using httpx until completion or failure."""
          # Ensure headers include the API key
         if not self.headers:
              logger.error("Attempted to poll status without API key headers.")
-             raise Exception("Transcription API key is missing.")
+             raise Exception("RunPod API key is missing.")
 
         attempts = 0
-        url = f"{self.base_url}?id={transcription_id}"
+        url = f"{self.base_url}/status/{job_id}"
 
         while attempts < self.max_polling_attempts:
             try:
-                logger.info(f"Polling transcription status: {url} (Attempt {attempts + 1}/{self.max_polling_attempts})")
+                logger.info(f"Polling RunPod job status: {url} (Attempt {attempts + 1}/{self.max_polling_attempts})")
 
                 # Use the shared client instance
-                # Use a shorter timeout for individual polls compared to the upload
-                response = await self.http_client.get(url, headers=self.headers, timeout=45.0) # Increased poll timeout slightly
+                response = await self.http_client.get(url, headers=self.headers, timeout=45.0)
                 response.raise_for_status() # Check for HTTP errors
 
                 data = response.json()
                 status = data.get("status")
-                logger.info(f"Transcription ID {transcription_id} status: {status}")
+                logger.info(f"RunPod Job ID {job_id} status: {status}")
 
-                if status == "COMPLETED" or status == "FAILED":
-                    return data
-                elif status in ["IN_QUEUE", "PENDING", "IN_PROGRESS"]:
+                if status == "COMPLETED":
+                    # Extract the output from RunPod response
+                    output = data.get("output", [])
+                    
+                    # Handle RunPod IVRIT.AI format: output is a list with nested 'result' containing JSON strings
+                    segments = []
+                    if isinstance(output, list) and len(output) > 0:
+                        # Extract segments from the nested result structure
+                        for item in output:
+                            if isinstance(item, dict) and 'result' in item:
+                                result_list = item['result']
+                                if isinstance(result_list, list):
+                                    # Parse each JSON string in the result list
+                                    import json
+                                    for json_str in result_list:
+                                        try:
+                                            segment_data = json.loads(json_str)
+                                            # Extract the relevant fields
+                                            segments.append({
+                                                'text': segment_data.get('text', ''),
+                                                'start': segment_data.get('start', 0),
+                                                'end': segment_data.get('end', 0)
+                                            })
+                                        except (json.JSONDecodeError, KeyError) as e:
+                                            logger.warning(f"Failed to parse segment JSON: {e}")
+                                            continue
+                    
+                    # Combine all text from segments
+                    full_text = " ".join([seg.get("text", "") for seg in segments if seg.get("text")])
+                    # Calculate total duration from segments
+                    total_duration = max([seg.get("end", 0) for seg in segments], default=0)
+                    
+                    logger.info(f"Parsed {len(segments)} segments from RunPod response")
+                    logger.info(f"Full text length: {len(full_text)}, Duration: {total_duration}s")
+                    
+                    return {
+                        "success": True,
+                        "status": "COMPLETED",
+                        "text": full_text,
+                        "duration": total_duration,
+                        "language": "he",  # Hebrew
+                        "segments": segments
+                    }
+                elif status == "FAILED":
+                    error_msg = data.get("error", "RunPod job failed")
+                    logger.error(f"RunPod job {job_id} failed: {error_msg}")
+                    return {
+                        "success": False,
+                        "status": "FAILED",
+                        "error": error_msg
+                    }
+                elif status in ["IN_QUEUE", "IN_PROGRESS"]:
                     attempts += 1
                     # Exponential backoff for polling interval
                     wait_time = self.polling_interval * (1.2 ** min(attempts // 3, 5)) # Faster initial polling, then slow down
-                    logger.info(f"Waiting {wait_time:.1f} seconds before next poll for ID {transcription_id}...")
+                    logger.info(f"Waiting {wait_time:.1f} seconds before next poll for Job ID {job_id}...")
                     await asyncio.sleep(wait_time) # Use async sleep
                 else:
-                    logger.warning(f"Unexpected status received for ID {transcription_id}: {status}. Treating as temporary issue and retrying.")
+                    logger.warning(f"Unexpected status received for Job ID {job_id}: {status}. Treating as temporary issue and retrying.")
                     attempts += 1
                     await asyncio.sleep(self.polling_interval * 2) # Wait longer for unexpected status
 
             except httpx.HTTPStatusError as http_err:
-                error_detail = f"HTTP error during polling status for ID {transcription_id}: {http_err.response.status_code}"
+                error_detail = f"HTTP error during polling status for Job ID {job_id}: {http_err.response.status_code}"
                 try:
                     err_data = http_err.response.json()
                     if 'error' in err_data:
@@ -417,31 +505,31 @@ class TranscriptionService:
 
                 # Handle specific HTTP errors
                 if http_err.response.status_code == 404:
-                     raise Exception(f"Polling failed: Transcription ID not found: {transcription_id}") from http_err
+                     raise Exception(f"Polling failed: RunPod Job ID not found: {job_id}") from http_err
                 elif http_err.response.status_code in [401, 403]:
                      raise Exception(f"Polling failed: Authentication error polling status (status {http_err.response.status_code})") from http_err
                 elif 500 <= http_err.response.status_code < 600:
-                     logger.warning(f"Server error ({http_err.response.status_code}) during polling for ID {transcription_id}, retrying...")
+                     logger.warning(f"Server error ({http_err.response.status_code}) during polling for Job ID {job_id}, retrying...")
                      attempts += 1
                      await asyncio.sleep(self.polling_interval * 2.5) # Wait longer for server errors
                 else: # Other client errors (4xx) are likely permanent
                      raise Exception(f"Polling failed: HTTP error polling status: {http_err.response.status_code}") from http_err
 
             except httpx.RequestError as req_err: # Includes timeouts, connection errors
-                logger.warning(f"Network error during polling for ID {transcription_id}: {str(req_err)}. Retrying...")
+                logger.warning(f"Network error during polling for Job ID {job_id}: {str(req_err)}. Retrying...")
                 attempts += 1
                 await asyncio.sleep(self.polling_interval * 1.5)
 
             except Exception as e:
-                 logger.error(f"Unexpected error polling transcription status for ID {transcription_id}: {str(e)}", exc_info=True)
+                 logger.error(f"Unexpected error polling RunPod job status for Job ID {job_id}: {str(e)}", exc_info=True)
                  # Depending on the error, you might want to retry or fail immediately
                  # For now, let's retry after a delay
                  attempts += 1
                  await asyncio.sleep(self.polling_interval * 2)
 
 
-        logger.error(f"Polling timed out after {self.max_polling_attempts} attempts for ID {transcription_id}")
-        raise Exception(f"Transcription timed out after ~{int(self.max_polling_attempts * self.polling_interval / 60)} minutes.")
+        logger.error(f"Polling timed out after {self.max_polling_attempts} attempts for Job ID {job_id}")
+        raise Exception(f"RunPod job timed out after ~{int(self.max_polling_attempts * self.polling_interval / 60)} minutes.")
 
     async def cleanup(self, *paths_to_delete: str):
         """Clean up temporary files asynchronously."""

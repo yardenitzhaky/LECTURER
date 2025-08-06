@@ -20,7 +20,8 @@ class Settings(BaseSettings):
     ALGORITHM: str  # Algorithm used for JWT token encoding (usually HS256)
     ACCESS_TOKEN_EXPIRE_MINUTES: int  # Token expiration time in minutes
     openai_api_key: Optional[str] = None  # OpenAI API key for external service
-    ivrit_ai_api_key: Optional[str] = None  # API key for IVRIT.AI transcription service
+    runpod_api_key: Optional[str] = None  # RunPod API key for transcription service
+    runpod_endpoint_id: Optional[str] = None  # RunPod endpoint ID for transcription service
 
     class Config:
         """
