@@ -80,10 +80,12 @@ export class APIService {
         }
     }
 
-    static async summarizeSlide(lectureId: string, slideIndex: number): Promise<SummarizeResponse> {
+    static async summarizeSlide(lectureId: string, slideIndex: number, customPrompt?: string): Promise<SummarizeResponse> {
         try {
+            const requestBody = customPrompt ? { custom_prompt: customPrompt } : {};
             const response = await api.post<SummarizeResponse>(
-                `/lectures/${lectureId}/slides/${slideIndex}/summarize`
+                `/lectures/${lectureId}/slides/${slideIndex}/summarize`,
+                requestBody
             );
             // --- ADD CONSOLE LOG HERE ---
             console.log(`[APIService.summarizeSlide] Raw Response Data (Lecture ${lectureId}, Slide ${slideIndex}):`, response.data);

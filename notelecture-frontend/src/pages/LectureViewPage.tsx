@@ -63,7 +63,7 @@ const LectureViewPage: React.FC = () => {
         }
     };
 
-    const handleSummarizeClick = async () => {
+    const handleSummarizeClick = async (customPrompt?: string) => {
         const currentSlideExists = lecture?.slides?.[currentSlideIndex];
         if (!id || lecture?.status !== 'completed' || isSummarizing || !currentSlideExists) {
             console.warn("Summarization blocked:", { id, status: lecture?.status, isSummarizing, currentSlideExists });
@@ -74,7 +74,7 @@ const LectureViewPage: React.FC = () => {
         setSummaryError('');
 
         try {
-            const result = await APIService.summarizeSlide(id, currentSlideIndex);
+            const result = await APIService.summarizeSlide(id, currentSlideIndex, customPrompt);
             await refetch(); // Refetch data after summarizing
             if (result.summary === null && result.message) {
                  setSummaryError(result.message);
@@ -85,6 +85,10 @@ const LectureViewPage: React.FC = () => {
         } finally {
             setIsSummarizing(false);
         }
+    };
+
+    const handleCustomSummarizeClick = (customPrompt: string) => {
+        handleSummarizeClick(customPrompt);
     };
 
     // --- Conditional Rendering ---
@@ -147,7 +151,8 @@ const LectureViewPage: React.FC = () => {
                     currentSlideIndex={currentSlideIndex}
                     isSummarizing={isSummarizing}
                     summaryError={summaryError}
-                    onSummarize={handleSummarizeClick}
+                    onSummarize={() => handleSummarizeClick()}
+                    onCustomSummarize={handleCustomSummarizeClick}
                 />
             </div>
         </div>

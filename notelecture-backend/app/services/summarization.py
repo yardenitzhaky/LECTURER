@@ -55,6 +55,48 @@ class SummarizationService:
         Summary:
         """
 
+        return await self._generate_summary(text, user_prompt)
+
+    async def summarize_with_custom_prompt(self, text: str, custom_prompt: str) -> str | None:
+        """
+        Generates a summary for the given text using a custom user-provided prompt.
+        Returns the summary string or None if summarization fails or is skipped.
+        """
+        if not self.llm:
+            logger.info("Skipping summarization as LangChain ChatOpenAI is not initialized.")
+            return None
+        if not text or text.strip() == "":
+            logger.info("Skipping summarization for empty text.")
+            return None
+        if not custom_prompt or custom_prompt.strip() == "":
+            logger.warning("Custom prompt is empty, falling back to default summarization")
+            return await self.summarize_text(text)
+
+        # Truncate text if it's extremely long
+        max_input_chars = 8000
+        if len(text) > max_input_chars:
+            logger.warning(f"Input text too long ({len(text)} chars), truncating to {max_input_chars}")
+            text = text[:max_input_chars] + "..."
+
+        # Sanitize and construct user prompt
+        sanitized_prompt = custom_prompt.strip()[:1000]  # Limit prompt length
+        user_prompt = f"""
+        {sanitized_prompt}
+
+        Transcription Text:
+        ---
+        {text}
+        ---
+
+        Please provide your response in Hebrew.
+        """
+
+        return await self._generate_summary(text, user_prompt)
+
+    async def _generate_summary(self, text: str, user_prompt: str) -> str | None:
+        """
+        Private method to generate summary using the provided prompt.
+        """
         try:
             logger.info(f"Requesting summary from LangChain ChatOpenAI for text snippet starting with: '{text[:100]}...'")
             

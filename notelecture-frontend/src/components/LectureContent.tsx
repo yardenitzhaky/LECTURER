@@ -1,8 +1,9 @@
 // src/components/LectureContent.tsx
-import React, { useMemo } from 'react';
-import { FileText, Sparkles, Loader2 } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import { FileText, Sparkles, Loader2, Copy, Check, Edit3 } from 'lucide-react';
 import { Slide, TranscriptionSegment } from '../index';
 import { formatTime } from '../format';
+import Modal from './Modal';
 
 interface LectureContentProps {
     currentSlide: Slide | undefined;
@@ -12,6 +13,7 @@ interface LectureContentProps {
     isSummarizing: boolean;
     summaryError: string;
     onSummarize: () => void;
+    onCustomSummarize: (customPrompt: string) => void;
 }
 
 /**
@@ -25,7 +27,14 @@ export const LectureContent: React.FC<LectureContentProps> = ({
     isSummarizing,
     summaryError,
     onSummarize,
+    onCustomSummarize,
 }) => {
+    // --- Local State ---
+    const [isCopied, setIsCopied] = useState(false);
+    const [copyError, setCopyError] = useState('');
+    const [isCustomPromptModalOpen, setIsCustomPromptModalOpen] = useState(false);
+    const [customPrompt, setCustomPrompt] = useState('');
+
     // --- Derived State & Memoization ---
     const slideTranscriptions = useMemo(() => {
         return allSegments.filter(
@@ -37,8 +46,58 @@ export const LectureContent: React.FC<LectureContentProps> = ({
     const showSummarizeButton = canSummarize && !currentSlide?.summary && !summaryError;
     const isProcessingTranscription = lectureStatus !== 'completed' && lectureStatus !== 'failed';
 
+    // --- Copy Functionality ---
+    const handleCopyTranscription = async () => {
+        const fullText = slideTranscriptions.map(segment => segment.text).join(' ');
+        
+        if (!fullText.trim()) {
+            setCopyError('אין טקסט להעתקה');
+            setTimeout(() => setCopyError(''), 3000);
+            return;
+        }
+
+        try {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                await navigator.clipboard.writeText(fullText);
+            } else {
+                // Fallback for older browsers
+                const textArea = document.createElement('textarea');
+                textArea.value = fullText;
+                document.body.appendChild(textArea);
+                textArea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textArea);
+            }
+            
+            setIsCopied(true);
+            setCopyError('');
+            setTimeout(() => setIsCopied(false), 2000);
+        } catch (err) {
+            console.error('Failed to copy text:', err);
+            setCopyError('שגיאה בהעתקה');
+            setTimeout(() => setCopyError(''), 3000);
+        }
+    };
+
+    // --- Custom Prompt Functionality ---
+    const handleCustomPromptSubmit = () => {
+        if (!customPrompt.trim()) {
+            return;
+        }
+        
+        onCustomSummarize(customPrompt.trim());
+        setIsCustomPromptModalOpen(false);
+        setCustomPrompt('');
+    };
+
+    const handleOpenCustomPrompt = () => {
+        setCustomPrompt('');
+        setIsCustomPromptModalOpen(true);
+    };
+
     // --- Render ---
     return (
+        <>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6 flex-grow overflow-hidden">
 
             {/* --- Left Panel: Slide Image + Summary --- */}
@@ -69,15 +128,20 @@ export const LectureContent: React.FC<LectureContentProps> = ({
                             <FileText className="w-5 h-5 ml-2"/>
                             סיכום שקופית
                         </h3>
-                        {/* Conditional Button: Summarize or Loading */}
+                        {/* Conditional Buttons: Summarize or Loading */}
                         {isSummarizing ? (
                              <button disabled={true} className="px-3 py-1 text-xs bg-gray-400 text-white rounded-md cursor-wait flex items-center">
                                  <Loader2 className="w-3 h-3 mr-1 animate-spin" /> מעבד...
                              </button>
                         ) : showSummarizeButton ? (
-                            <button onClick={onSummarize} className="px-3 py-1 text-xs bg-blue-500 hover:bg-blue-600 text-white rounded-md flex items-center transition-opacity duration-200">
-                                <Sparkles className="w-3 h-3 mr-1" /> צור סיכום
-                            </button>
+                            <div className="flex space-x-2">
+                                <button onClick={handleOpenCustomPrompt} className="px-3 py-1 text-xs bg-purple-500 hover:bg-purple-600 text-white rounded-md flex items-center transition-opacity duration-200">
+                                    <Edit3 className="w-3 h-3 mr-1" /> סיכום מותאם
+                                </button>
+                                <button onClick={onSummarize} className="px-3 py-1 text-xs bg-blue-500 hover:bg-blue-600 text-white rounded-md flex items-center transition-opacity duration-200">
+                                    <Sparkles className="w-3 h-3 mr-1" /> צור סיכום
+                                </button>
+                            </div>
                         ) : null}
                     </div>
 
@@ -109,9 +173,41 @@ export const LectureContent: React.FC<LectureContentProps> = ({
 
             {/* --- Right Panel: Transcription --- */}
             <div className="bg-white rounded-lg shadow-sm flex flex-col overflow-hidden">
-                <h2 className="text-lg md:text-xl font-semibold p-4 border-b text-right flex-shrink-0">
-                    תמלול שקופית {currentSlideIndex + 1}
-                </h2>
+                <div className="p-4 border-b flex-shrink-0 flex justify-between items-center">
+                    <h2 className="text-lg md:text-xl font-semibold text-right">
+                        תמלול שקופית {currentSlideIndex + 1}
+                    </h2>
+                    
+                    {/* Copy Button */}
+                    <div className="flex items-center space-x-2">
+                        {copyError && (
+                            <span className="text-red-500 text-sm">{copyError}</span>
+                        )}
+                        <button
+                            onClick={handleCopyTranscription}
+                            disabled={slideTranscriptions.length === 0 || isProcessingTranscription}
+                            className={`px-3 py-2 text-sm rounded-md flex items-center transition-all duration-200 ${
+                                isCopied 
+                                    ? 'bg-green-500 text-white'
+                                    : slideTranscriptions.length === 0 || isProcessingTranscription
+                                        ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                        : 'bg-blue-500 hover:bg-blue-600 text-white'
+                            }`}
+                        >
+                            {isCopied ? (
+                                <>
+                                    <Check className="w-4 h-4 mr-1" />
+                                    הועתק!
+                                </>
+                            ) : (
+                                <>
+                                    <Copy className="w-4 h-4 mr-1" />
+                                    העתק תמלול
+                                </>
+                            )}
+                        </button>
+                    </div>
+                </div>
                 <div dir="rtl" className="space-y-1 overflow-y-auto flex-grow p-4 custom-scrollbar">
                     {/* Transcription Segments or Loading/Empty State */}
                     {slideTranscriptions.length > 0 ? (
@@ -138,7 +234,51 @@ export const LectureContent: React.FC<LectureContentProps> = ({
                 </div>
             </div> {/* End Right Panel */}
 
-        </div> // End Grid Layout
+        </div> {/* End Grid Layout */}
+        
+        {/* Custom Prompt Modal */}
+        <Modal
+            isOpen={isCustomPromptModalOpen}
+            onClose={() => setIsCustomPromptModalOpen(false)}
+            title="סיכום מותאם אישית"
+            maxWidth="max-w-lg"
+        >
+            <div className="space-y-4">
+                <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                        הכנס הנחיות לסיכום:
+                    </label>
+                    <textarea
+                        value={customPrompt}
+                        onChange={(e) => setCustomPrompt(e.target.value)}
+                        className="w-full h-32 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                        placeholder="לדוגמה: צור רשימה של נקודות המפתח העיקריות בפורמט של תקציבי מהנושא..."
+                        dir="rtl"
+                    />
+                </div>
+                
+                <div className="flex justify-end space-x-3 pt-4">
+                    <button
+                        onClick={() => setIsCustomPromptModalOpen(false)}
+                        className="px-4 py-2 text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors"
+                    >
+                        ביטול
+                    </button>
+                    <button
+                        onClick={handleCustomPromptSubmit}
+                        disabled={!customPrompt.trim()}
+                        className={`px-4 py-2 rounded-md transition-colors ${
+                            customPrompt.trim()
+                                ? 'bg-purple-500 hover:bg-purple-600 text-white'
+                                : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                        }`}
+                    >
+                        צור סיכום
+                    </button>
+                </div>
+            </div>
+        </Modal>
+        </>
     );
 };
 

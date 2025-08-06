@@ -10,6 +10,7 @@ from fastapi import (
     APIRouter, Form, UploadFile, File, HTTPException,
     BackgroundTasks, Depends
 )
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app import deps
@@ -23,6 +24,10 @@ from app.services.transcription import TranscriptionService
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+# --- Request Models ---
+class SummarizeRequest(BaseModel):
+    custom_prompt: Optional[str] = None
 
 # Initialize services directly in this module
 transcription_service = TranscriptionService()
@@ -261,6 +266,7 @@ async def get_lecture_transcription(
 async def summarize_slide_endpoint(
     lecture_id: int,
     slide_index: int,
+    request: SummarizeRequest = SummarizeRequest(),
     db: Session = Depends(deps.get_db)
 ) -> Dict[str, Optional[str]]:
     """Generates and saves a summary for a specific slide."""
@@ -290,7 +296,12 @@ async def summarize_slide_endpoint(
          raise HTTPException(status_code=503, detail="Summarization service is not configured.")
 
     try:
-        new_summary = await summarization_service.summarize_text(full_slide_text)
+        if request.custom_prompt:
+            logger.info(f"Using custom prompt for L:{lecture_id} S:{slide_index}: {request.custom_prompt[:50]}...")
+            new_summary = await summarization_service.summarize_with_custom_prompt(full_slide_text, request.custom_prompt)
+        else:
+            new_summary = await summarization_service.summarize_text(full_slide_text)
+        
         if new_summary is None:
             logger.error(f"Summarization returned None for L:{lecture_id} S:{slide_index}")
             raise HTTPException(status_code=503, detail="Summarization service returned no content.")
