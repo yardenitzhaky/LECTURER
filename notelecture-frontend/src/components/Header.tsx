@@ -9,12 +9,13 @@ export const Header: React.FC = () => {
 
   const handleLogoClick = (e: React.MouseEvent) => {
     e.preventDefault();
-    setTimeout(() => navigate('/'), 0);
+    const destination = user ? '/dashboard' : '/';
+    setTimeout(() => navigate(destination), 0);
   };
 
   const handleLogout = () => {
     logout();
-    navigate('/login');
+    navigate('/');
   };
 
   return (
