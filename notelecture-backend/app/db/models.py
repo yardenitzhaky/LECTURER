@@ -1,9 +1,23 @@
 # app/db/models.py
-from sqlalchemy import Column, Integer, String, Float, ForeignKey, Text
+from sqlalchemy import Column, Integer, String, Float, ForeignKey, Text, DateTime, Boolean
 from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.mysql import MEDIUMTEXT, LONGTEXT
+from fastapi_users.db import SQLAlchemyBaseUserTableUUID
+from datetime import datetime
+import uuid
 
 from app.db.base_class import Base
+
+class User(SQLAlchemyBaseUserTableUUID, Base):
+    __tablename__ = "users"
+    
+    # Additional user fields beyond FastAPI-Users defaults
+    first_name = Column(String(100), nullable=True)
+    last_name = Column(String(100), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Relationship to lectures
+    lectures = relationship("Lecture", back_populates="user", cascade="all, delete-orphan")
 
 class Lecture(Base):
     __tablename__ = "lectures"
@@ -13,6 +27,7 @@ class Lecture(Base):
     status = Column(String(50), index=True)
     video_path = Column(Text)
     presentation_path = Column(String(255)) # This field is not used, consider removing or implementing it
+    user_id = Column(String(36), ForeignKey("users.id"), nullable=False, index=True)
 
     transcription_segments = relationship(
         "TranscriptionSegment",
@@ -24,6 +39,7 @@ class Lecture(Base):
         back_populates="lecture",
         cascade="all, delete-orphan"
     )
+    user = relationship("User", back_populates="lectures")
 
 class Slide(Base):
     __tablename__ = "slides"

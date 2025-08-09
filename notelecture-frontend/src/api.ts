@@ -9,6 +9,15 @@ const api = axios.create({
     },
 });
 
+// Add request interceptor to include auth token
+api.interceptors.request.use((config) => {
+    const token = localStorage.getItem('token');
+    if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+});
+
 function isApiError(error: unknown): error is { response: { data: APIError } } {
     return (
         typeof error === 'object' &&
@@ -25,7 +34,7 @@ export class APIService {
         formData: FormData
     ): Promise<UploadResponse> {
         try {
-            const response = await api.post<UploadResponse>('/transcribe/', formData, {
+            const response = await api.post<UploadResponse>('/api/transcribe/', formData, {
                 headers: {
                     'Content-Type': 'multipart/form-data',
                 },
@@ -42,7 +51,7 @@ export class APIService {
 
     static async getLecture(id: string): Promise<Lecture> {
         try {
-            const response = await api.get<any>(`/lectures/${id}/transcription`);
+            const response = await api.get<any>(`/api/lectures/${id}/transcription`);
 
 
             // Map slides, including the new summary field
@@ -84,7 +93,7 @@ export class APIService {
         try {
             const requestBody = customPrompt ? { custom_prompt: customPrompt } : {};
             const response = await api.post<SummarizeResponse>(
-                `/lectures/${lectureId}/slides/${slideIndex}/summarize`,
+                `/api/lectures/${lectureId}/slides/${slideIndex}/summarize`,
                 requestBody
             );
             // --- ADD CONSOLE LOG HERE ---

@@ -7,7 +7,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles # Keep if needed
 
 from app.api import api
+from app.api import oauth
 from app.core.config import settings
+from app.auth import fastapi_users, auth_backend, google_oauth_client
+from app.schemas import UserRead, UserCreate, UserUpdate
 
 
 # --- Basic Logging Configuration ---
@@ -36,6 +39,34 @@ app.add_middleware(
     allow_headers=["*"], # Consider restricting headers
 )
 
-# --- Include Routers ---
+# --- Include Authentication Routers ---
+app.include_router(
+    fastapi_users.get_auth_router(auth_backend), prefix="/api/auth/jwt", tags=["auth"]
+)
+app.include_router(
+    fastapi_users.get_register_router(UserRead, UserCreate), prefix="/api/auth", tags=["auth"]
+)
+app.include_router(
+    fastapi_users.get_reset_password_router(),
+    prefix="/api/auth",
+    tags=["auth"],
+)
+app.include_router(
+    fastapi_users.get_verify_router(UserRead),
+    prefix="/api/auth",
+    tags=["auth"],
+)
+app.include_router(
+    fastapi_users.get_users_router(UserRead, UserUpdate),
+    prefix="/api/users",
+    tags=["users"],
+)
+app.include_router(
+    oauth.router,
+    prefix="/api/auth/google",
+    tags=["auth"],
+)
+
+# --- Include API Routers ---
 app.include_router(api.router, prefix="/api")
 logger.info("API router included at prefix /api")

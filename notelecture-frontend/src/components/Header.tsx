@@ -1,13 +1,20 @@
 //src/components/Header.tsx
 import { Link, useNavigate } from 'react-router-dom';
-import { BookOpen, Upload, FileText } from 'lucide-react';
+import { BookOpen, Upload, User, LogOut } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
 
 export const Header: React.FC = () => {
   const navigate = useNavigate();
+  const { user, logout } = useAuth();
 
   const handleLogoClick = (e: React.MouseEvent) => {
     e.preventDefault();
     setTimeout(() => navigate('/'), 0);
+  };
+
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
   };
 
   return (
@@ -27,14 +34,48 @@ export const Header: React.FC = () => {
             </Link>
           </div>
           
-          <div className="flex items-center">
-            <Link 
-              to="/upload" 
-              className="flex items-center px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-all duration-200"
-            >
-              <Upload className="h-4 w-4 mr-1" />
-              Upload Lecture
-            </Link>
+          <div className="flex items-center space-x-4">
+            {user ? (
+              <>
+                <Link 
+                  to="/upload" 
+                  className="flex items-center px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-all duration-200"
+                >
+                  <Upload className="h-4 w-4 mr-1" />
+                  Upload Lecture
+                </Link>
+                
+                <div className="flex items-center space-x-2">
+                  <div className="flex items-center text-sm text-gray-700">
+                    <User className="h-4 w-4 mr-1" />
+                    {user.first_name || user.email}
+                  </div>
+                  
+                  <button
+                    onClick={handleLogout}
+                    className="flex items-center px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:bg-red-50 hover:text-red-700 transition-all duration-200"
+                  >
+                    <LogOut className="h-4 w-4 mr-1" />
+                    Logout
+                  </button>
+                </div>
+              </>
+            ) : (
+              <div className="flex items-center space-x-2">
+                <Link 
+                  to="/login" 
+                  className="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-all duration-200"
+                >
+                  Sign In
+                </Link>
+                <Link 
+                  to="/register" 
+                  className="px-3 py-2 rounded-md text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-all duration-200"
+                >
+                  Sign Up
+                </Link>
+              </div>
+            )}
           </div>
         </div>
       </div>

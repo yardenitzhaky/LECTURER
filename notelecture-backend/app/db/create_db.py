@@ -6,13 +6,13 @@ from sqlalchemy.exc import OperationalError, ProgrammingError
 from sqlalchemy.engine.url import make_url, URL # Import URL type as well
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
-project_root = os.path.abspath(os.path.join(current_dir, os.pardir))
+project_root = os.path.abspath(os.path.join(current_dir, "../.."))
 sys.path.insert(0, project_root)
 
 try:
     from app.db.base_class import Base
     from app.db.session import engine 
-    from app.db import Lecture, Slide, TranscriptionSegment 
+    from app.db.models import Lecture, Slide, TranscriptionSegment  # noqa: F401 
     from app.core.config import settings
 except ImportError as e:
     logging.error(f"Failed to import application modules. Ensure you are running this script from the 'notelecture-backend' directory or that '{project_root}' is in your PYTHONPATH.")

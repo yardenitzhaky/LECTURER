@@ -8,6 +8,7 @@ python-multipart==0.0.9
 # Database
 SQLAlchemy==2.0.25
 PyMySQL[rsa]==1.1.1     
+aiomysql==0.2.0
 cryptography>=42.0.0    
 
 # AI and Processing (Core)
@@ -32,6 +33,9 @@ pytesseract==0.3.10      # OCR for slide text extraction
 # Utilities
 python-dotenv==1.0.0     
 pydantic-settings==2.1.0 
+
+# Authentication
+fastapi-users[sqlalchemy,oauth]==13.0.0
 
 # Testing
 pytest>=8.2.0

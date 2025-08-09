@@ -3,7 +3,7 @@ import os
 import uuid
 import logging
 from pathlib import Path
-from typing import Dict, Any, Optional, List, Callable
+from typing import Dict, Any, Optional, Callable
 
 import aiofiles
 from fastapi import (
@@ -15,13 +15,15 @@ from sqlalchemy.orm import Session
 
 from app import deps
 from app.core.config import settings
-from app.db.models import Lecture, TranscriptionSegment, Slide
+from app.db.models import Lecture, TranscriptionSegment, Slide, User
+from app.auth import current_active_user
 from app.db.session import SessionLocal
 from app.services.presentation import PresentationService
 from app.services.slide_matching import SlideMatchingService
 from app.services.summarization import SummarizationService # Import the class
 from app.services.transcription import TranscriptionService
 from app.utils.ocr import extract_text_from_base64_image
+from app.utils.database import update_lecture_status
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -36,22 +38,7 @@ presentation_service = PresentationService()
 slide_matching_service = SlideMatchingService()
 summarization_service = SummarizationService() 
 
-# --- Helper Function ---
-def _update_lecture_status(db: Session, lecture_id: int, status: str):
-    """Helper function to update lecture status, uses row locking."""
-    try:
-        lecture = db.query(Lecture).filter(Lecture.id == lecture_id).with_for_update().first()
-        if lecture:
-            lecture.status = status
-            db.commit()
-            logger.info(f"Lecture ID {lecture_id} status updated to: {status}")
-        else:
-            logger.warning(f"Attempted status update for non-existent lecture ID: {lecture_id}")
-    except Exception as e:
-        logger.error(f"Failed to update status for lecture {lecture_id} to {status}: {e}", exc_info=True)
-        try: db.rollback()
-        except Exception as rb_exc: logger.error(f"Rollback failed during status update failure for lecture {lecture_id}: {rb_exc}", exc_info=True)
-        raise # Re-raise original error
+# Helper function is now in app.utils.database
 
 # --- API Endpoints ---
 
@@ -59,6 +46,7 @@ def _update_lecture_status(db: Session, lecture_id: int, status: str):
 async def transcribe_lecture(
     background_tasks: BackgroundTasks,
     db: Session = Depends(deps.get_db),
+    current_user: User = Depends(current_active_user),
     presentation: UploadFile = File(...),
     video: Optional[UploadFile] = File(None),
     video_url: Optional[str] = Form(None),
@@ -100,14 +88,14 @@ async def transcribe_lecture(
 
         # Create initial lecture record
         lecture_title = Path(presentation_filename).stem or Path(original_video_filename).stem or "Untitled Lecture"
-        lecture = Lecture(title=lecture_title, status="pending", video_path=video_path_str)
+        lecture = Lecture(title=lecture_title, status="pending", video_path=video_path_str, user_id=str(current_user.id))
         db.add(lecture)
         db.flush()
         lecture_id = lecture.id
         logger.info(f"Created Lecture record ID: {lecture_id}, Status: pending")
 
         # Process and save slides
-        _update_lecture_status(db, lecture_id, "processing_slides")
+        update_lecture_status(db, lecture_id, "processing_slides")
         try:
             slide_images = await presentation_service.process_presentation(presentation_content, file_extension)
             slides_to_add = [Slide(lecture_id=lecture_id, index=i, image_data=img) for i, img in enumerate(slide_images)]
@@ -115,19 +103,19 @@ async def transcribe_lecture(
             db.commit() # Commit lecture creation and slides together
             logger.info(f"Saved {len(slides_to_add)} slides for lecture ID: {lecture_id}")
         except Exception as pres_err:
-             _update_lecture_status(db, lecture_id, "failed") # Mark as failed
+             update_lecture_status(db, lecture_id, "failed") # Mark as failed
              raise HTTPException(status_code=500, detail=f"Error processing presentation: {pres_err}") from pres_err
 
         # Enqueue background task
         background_tasks.add_task(process_video_background, video_path_or_url=video_path_str, lecture_id=lecture_id, db_session_factory=SessionLocal)
-        _update_lecture_status(db, lecture_id, "processing") # Mark as processing now
+        update_lecture_status(db, lecture_id, "processing") # Mark as processing now
 
         return {"message": "Processing started", "lecture_id": lecture_id}
 
     except Exception as e:
         logger.error(f"Error in /transcribe/ (Lecture ID: {lecture_id or 'N/A'}): {e}", exc_info=True)
         if lecture_id and not isinstance(e, HTTPException): # Avoid double update if already failed
-             try: _update_lecture_status(db, lecture_id, "failed")
+             try: update_lecture_status(db, lecture_id, "failed")
              except Exception as status_err: logger.error(f"Failed to mark lecture {lecture_id} as failed during error handling: {status_err}")
         elif not lecture_id: db.rollback() # Rollback if lecture wasn't created
 
@@ -149,7 +137,7 @@ async def process_video_background(
     def update_status(status: str):
         """Nested helper to update status using the task's DB session."""
         if not db: return
-        try: _update_lecture_status(db, lecture_id, status)
+        try: update_lecture_status(db, lecture_id, status)
         except Exception as e: logger.error(f"[BG Task Helper] Status update failed for L:{lecture_id} S:{status}: {e}")
 
     try:
@@ -232,13 +220,36 @@ async def process_video_background(
         if db: db.close()
 
 
+@router.get("/lectures/")
+async def get_user_lectures(
+    db: Session = Depends(deps.get_db),
+    current_user: User = Depends(current_active_user)
+) -> Dict[str, Any]:
+    """Get all lectures for the current user."""
+    try:
+        lectures = db.query(Lecture).filter(Lecture.user_id == str(current_user.id)).order_by(Lecture.id.desc()).all()
+        
+        return {
+            "lectures": [{
+                "id": lecture.id,
+                "title": lecture.title,
+                "status": lecture.status,
+                "video_path": lecture.video_path
+            } for lecture in lectures]
+        }
+    except Exception as e:
+        logger.error(f"Error retrieving lectures for user {current_user.id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error retrieving lectures: {str(e)}")
+
+
 @router.get("/lectures/{lecture_id}/transcription")
 async def get_lecture_transcription(
     lecture_id: int,
-    db: Session = Depends(deps.get_db)
+    db: Session = Depends(deps.get_db),
+    current_user: User = Depends(current_active_user)
 ) -> Dict[str, Any]:
     """Retrieve lecture data including metadata, slides, and transcription."""
-    lecture = db.query(Lecture).filter(Lecture.id == lecture_id).first()
+    lecture = db.query(Lecture).filter(Lecture.id == lecture_id, Lecture.user_id == str(current_user.id)).first()
     if not lecture:
         raise HTTPException(status_code=404, detail="Lecture not found")
 
@@ -268,16 +279,22 @@ async def summarize_slide_endpoint(
     lecture_id: int,
     slide_index: int,
     request: SummarizeRequest = SummarizeRequest(),
-    db: Session = Depends(deps.get_db)
+    db: Session = Depends(deps.get_db),
+    current_user: User = Depends(current_active_user)
 ) -> Dict[str, Optional[str]]:
     """Generates and saves a summary for a specific slide."""
     logger.info(f"Summarize request for L:{lecture_id} S:{slide_index}")
 
+    # Verify user owns the lecture first
+    lecture = db.query(Lecture).filter(Lecture.id == lecture_id, Lecture.user_id == str(current_user.id)).first()
+    if not lecture:
+        raise HTTPException(status_code=404, detail="Lecture not found")
+    
     slide = db.query(Slide).filter(Slide.lecture_id == lecture_id, Slide.index == slide_index).with_for_update().first()
     if not slide:
         raise HTTPException(status_code=404, detail="Slide not found")
 
-    lecture_status = db.query(Lecture.status).filter(Lecture.id == lecture_id).scalar()
+    lecture_status = lecture.status
     if lecture_status != 'completed':
          raise HTTPException(status_code=400, detail=f"Cannot summarize, lecture status is '{lecture_status}'.")
 

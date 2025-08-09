@@ -22,6 +22,11 @@ class Settings(BaseSettings):
     openai_api_key: Optional[str] = None  # OpenAI API key for external service
     runpod_api_key: Optional[str] = None  # RunPod API key for transcription service
     runpod_endpoint_id: Optional[str] = None  # RunPod endpoint ID for transcription service
+    
+    # Google OAuth settings
+    GOOGLE_OAUTH_CLIENT_ID: str
+    GOOGLE_OAUTH_CLIENT_SECRET: str
+    FRONTEND_URL: str = "http://localhost:5173"
 
     class Config:
         """
