@@ -7,7 +7,8 @@ python-multipart==0.0.9
 
 # Database
 SQLAlchemy==2.0.25
-PyMySQL==1.1.1           # 
+PyMySQL[rsa]==1.1.1     
+cryptography>=42.0.0    
 
 # AI and Processing (Core)
 langchain==0.2.11
