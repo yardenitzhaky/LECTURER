@@ -1,22 +1,18 @@
 //src/pages/HomePage.tsx
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { BookOpen, FileText, Video, ArrowRight, Clock, CheckCircle, AlertCircle } from 'lucide-react';
-import axios from 'axios';
-
-interface Lecture {
-  id: number;
-  title: string;
-  status: string;
-  video_path: string;
-}
+import { BookOpen, FileText, Video, ArrowRight, Clock, CheckCircle, AlertCircle, Edit2, Trash2, Save, X } from 'lucide-react';
+import { APIService } from '../api';
+import type { LectureSummary } from '../index';
 
 export const HomePage: React.FC = () => {
   const [isVisible, setIsVisible] = useState(false);
   const [isBouncing, setIsBouncing] = useState(true);
-  const [lectures, setLectures] = useState<Lecture[]>([]);
+  const [lectures, setLectures] = useState<LectureSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editTitle, setEditTitle] = useState('');
 
   useEffect(() => {
     setIsVisible(true);
@@ -28,9 +24,9 @@ export const HomePage: React.FC = () => {
     // Fetch user's lectures
     const fetchLectures = async () => {
       try {
-        const response = await axios.get(`${import.meta.env.VITE_API_URL}/api/lectures/`);
-        setLectures(response.data.lectures);
-      } catch (err: any) {
+        const response = await APIService.getLectures();
+        setLectures(response.lectures);
+      } catch (err) {
         setError('Failed to load lectures');
         console.error('Error fetching lectures:', err);
       } finally {
@@ -68,6 +64,44 @@ export const HomePage: React.FC = () => {
         return 'Matching slides';
       default:
         return 'Processing';
+    }
+  };
+
+  const handleEditClick = (lecture: LectureSummary) => {
+    setEditingId(lecture.id);
+    setEditTitle(lecture.title);
+  };
+
+  const handleSaveEdit = async (lectureId: number) => {
+    try {
+      await APIService.updateLecture(lectureId, { title: editTitle });
+      setLectures(lectures.map(lecture => 
+        lecture.id === lectureId ? { ...lecture, title: editTitle } : lecture
+      ));
+      setEditingId(null);
+      setEditTitle('');
+    } catch (err) {
+      console.error('Error updating lecture:', err);
+      setError('Failed to update lecture');
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setEditingId(null);
+    setEditTitle('');
+  };
+
+  const handleDeleteClick = async (lectureId: number) => {
+    if (!confirm('Are you sure you want to delete this lecture? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      await APIService.deleteLecture(lectureId);
+      setLectures(lectures.filter(lecture => lecture.id !== lectureId));
+    } catch (err) {
+      console.error('Error deleting lecture:', err);
+      setError('Failed to delete lecture');
     }
   };
 
@@ -151,8 +185,56 @@ export const HomePage: React.FC = () => {
                 {lectures.map((lecture) => (
                   <div key={lecture.id} className="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow p-6">
                     <div className="flex items-start justify-between mb-4">
-                      <h3 className="text-lg font-semibold text-gray-900 truncate">{lecture.title}</h3>
-                      <div className="flex items-center ml-2">
+                      {editingId === lecture.id ? (
+                        <div className="flex-1 mr-2">
+                          <input
+                            type="text"
+                            value={editTitle}
+                            onChange={(e) => setEditTitle(e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            autoFocus
+                          />
+                        </div>
+                      ) : (
+                        <h3 className="text-lg font-semibold text-gray-900 truncate flex-1">{lecture.title}</h3>
+                      )}
+                      
+                      <div className="flex items-center space-x-2 ml-2">
+                        {editingId === lecture.id ? (
+                          <>
+                            <button
+                              onClick={() => handleSaveEdit(lecture.id)}
+                              className="p-1 text-green-600 hover:text-green-800"
+                              title="Save"
+                            >
+                              <Save className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={handleCancelEdit}
+                              className="p-1 text-gray-600 hover:text-gray-800"
+                              title="Cancel"
+                            >
+                              <X className="h-4 w-4" />
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <button
+                              onClick={() => handleEditClick(lecture)}
+                              className="p-1 text-gray-600 hover:text-gray-800"
+                              title="Rename"
+                            >
+                              <Edit2 className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteClick(lecture.id)}
+                              className="p-1 text-red-600 hover:text-red-800"
+                              title="Delete"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </>
+                        )}
                         {getStatusIcon(lecture.status)}
                       </div>
                     </div>

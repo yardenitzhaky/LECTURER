@@ -32,6 +32,10 @@ router = APIRouter()
 class SummarizeRequest(BaseModel):
     custom_prompt: Optional[str] = None
 
+class UpdateLectureRequest(BaseModel):
+    title: Optional[str] = None
+    notes: Optional[str] = None
+
 # Initialize services directly in this module
 transcription_service = TranscriptionService()
 presentation_service = PresentationService()
@@ -234,7 +238,8 @@ async def get_user_lectures(
                 "id": lecture.id,
                 "title": lecture.title,
                 "status": lecture.status,
-                "video_path": lecture.video_path
+                "video_path": lecture.video_path,
+                "notes": lecture.notes
             } for lecture in lectures]
         }
     except Exception as e:
@@ -263,6 +268,7 @@ async def get_lecture_transcription(
             "lecture_id": lecture.id,
             "title": lecture.title,
             "status": lecture.status,
+            "notes": lecture.notes,
             "slides": [{"imageUrl": s.image_data, "index": s.index, "summary": s.summary} for s in slides],
             "transcription": [{
                 "id": seg.id, "startTime": seg.start_time, "endTime": seg.end_time,
@@ -345,3 +351,70 @@ async def summarize_slide_endpoint(
         db.rollback()
         logger.error(f"Failed to summarize or save summary for L:{lecture_id} S:{slide_index}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error during summarization process: {str(e)}")
+
+
+@router.put("/lectures/{lecture_id}")
+async def update_lecture(
+    lecture_id: int,
+    request: UpdateLectureRequest,
+    db: Session = Depends(deps.get_db),
+    current_user: User = Depends(current_active_user)
+) -> Dict[str, Any]:
+    """Update lecture title and/or notes."""
+    lecture = db.query(Lecture).filter(Lecture.id == lecture_id, Lecture.user_id == str(current_user.id)).first()
+    if not lecture:
+        raise HTTPException(status_code=404, detail="Lecture not found")
+    
+    try:
+        if request.title is not None:
+            lecture.title = request.title
+        if request.notes is not None:
+            lecture.notes = request.notes
+            
+        db.commit()
+        logger.info(f"Updated lecture {lecture_id} for user {current_user.id}")
+        
+        return {
+            "id": lecture.id,
+            "title": lecture.title,
+            "status": lecture.status,
+            "video_path": lecture.video_path,
+            "notes": lecture.notes
+        }
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error updating lecture {lecture_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error updating lecture: {str(e)}")
+
+
+@router.delete("/lectures/{lecture_id}")
+async def delete_lecture(
+    lecture_id: int,
+    db: Session = Depends(deps.get_db),
+    current_user: User = Depends(current_active_user)
+) -> Dict[str, str]:
+    """Delete a lecture and all its associated data."""
+    lecture = db.query(Lecture).filter(Lecture.id == lecture_id, Lecture.user_id == str(current_user.id)).first()
+    if not lecture:
+        raise HTTPException(status_code=404, detail="Lecture not found")
+    
+    try:
+        # Delete video file if it exists locally
+        if lecture.video_path and not lecture.video_path.startswith(('http://', 'https://')):
+            if os.path.exists(lecture.video_path):
+                try:
+                    os.remove(lecture.video_path)
+                    logger.info(f"Deleted video file: {lecture.video_path}")
+                except Exception as file_err:
+                    logger.warning(f"Could not delete video file {lecture.video_path}: {file_err}")
+        
+        # Database cascades will handle slides and transcription_segments deletion
+        db.delete(lecture)
+        db.commit()
+        
+        logger.info(f"Deleted lecture {lecture_id} for user {current_user.id}")
+        return {"message": "Lecture deleted successfully"}
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error deleting lecture {lecture_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error deleting lecture: {str(e)}")

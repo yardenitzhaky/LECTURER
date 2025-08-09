@@ -28,6 +28,7 @@ class Lecture(Base):
     video_path = Column(Text)
     presentation_path = Column(String(255)) # This field is not used, consider removing or implementing it
     user_id = Column(String(36), ForeignKey("users.id"), nullable=False, index=True)
+    notes = Column(Text, nullable=True)
 
     transcription_segments = relationship(
         "TranscriptionSegment",

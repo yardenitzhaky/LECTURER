@@ -6,6 +6,7 @@ import { APIService } from '../api';
 import { useLectureData } from './useLectureData'; // Custom hook for data logic
 import { LectureHeader } from '../components/LectureHeader'; // Component 2
 import { LectureContent } from '../components/LectureContent'; // Component 3
+import { NotesSection } from '../components/NotesSection';
 
 const DEBOUNCE_DELAY_MS = 750; // Debounce time for refresh button
 
@@ -91,6 +92,18 @@ const LectureViewPage: React.FC = () => {
         handleSummarizeClick(customPrompt);
     };
 
+    const handleSaveNotes = async (notes: string) => {
+        if (!id) return;
+        
+        try {
+            await APIService.updateLecture(parseInt(id), { notes });
+            await refetch(); // Refresh the lecture data to get updated notes
+        } catch (err) {
+            console.error("Error saving notes:", err);
+            throw err; // Re-throw to let the NotesSection handle the error state
+        }
+    };
+
     // --- Conditional Rendering ---
     if (isLoading) {
         // ... loading state ...
@@ -142,6 +155,12 @@ const LectureViewPage: React.FC = () => {
                     onNext={handleNextSlide}
                     onRefresh={handleDebouncedRefresh} // Use debounced handler
                     isRefreshing={isRefreshing}
+                />
+
+                <NotesSection
+                    notes={lecture.notes}
+                    onSaveNotes={handleSaveNotes}
+                    lectureId={lecture.lecture_id}
                 />
 
                 <LectureContent
