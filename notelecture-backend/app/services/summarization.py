@@ -26,7 +26,7 @@ class SummarizationService:
                 logger.error(f"Failed to initialize LangChain ChatOpenAI: {e}", exc_info=True)
                 self.llm = None 
 
-    async def summarize_text(self, text: str, max_length: int = 75) -> str | None:
+    async def summarize_text(self, text: str, slide_content: str = None, max_length: int = 75) -> str | None:
         """
         Generates a summary for the given text using LangChain ChatOpenAI.
         Returns the summary string or None if summarization fails or is skipped.
@@ -44,20 +44,35 @@ class SummarizationService:
             logger.warning(f"Input text too long ({len(text)} chars), truncating to {max_input_chars}")
             text = text[:max_input_chars] + "..."
 
-        user_prompt = f"""
-        Please summarize the following lecture transcription text concisely in Hebrew, focusing on the main topics or key points. Aim for 2-4 bullet points or a short paragraph ({max_length} words max).
+        slide_section = ""
+        if slide_content and slide_content.strip():
+            slide_section = f"""
+        Slide Content:
+        ---
+        {slide_content}
+        ---
+        """
 
-        Transcription Text:
+        user_prompt = f"""
+        You are analyzing lecture content. Your task is to summarize the transcription text in Hebrew, focusing specifically on how it relates to and explains the slide content shown.
+        {slide_section}
+        Transcription Text (what the lecturer said):
         ---
         {text}
         ---
+
+        Instructions:
+        - If slide content is available, prioritize summarizing the transcription based on how it explains, elaborates on, or relates to the slide content
+        - Focus on the key explanations, examples, or details the lecturer provided about the slide topics
+        - If no slide content is available, summarize the main topics and key points from the transcription
+        - Provide a concise summary in Hebrew (2-4 bullet points or short paragraph, max {max_length} words)
 
         Summary:
         """
 
         return await self._generate_summary(text, user_prompt)
 
-    async def summarize_with_custom_prompt(self, text: str, custom_prompt: str) -> str | None:
+    async def summarize_with_custom_prompt(self, text: str, custom_prompt: str, slide_content: str = None) -> str | None:
         """
         Generates a summary for the given text using a custom user-provided prompt.
         Returns the summary string or None if summarization fails or is skipped.
@@ -70,7 +85,7 @@ class SummarizationService:
             return None
         if not custom_prompt or custom_prompt.strip() == "":
             logger.warning("Custom prompt is empty, falling back to default summarization")
-            return await self.summarize_text(text)
+            return await self.summarize_text(text, slide_content)
 
         # Truncate text if it's extremely long
         max_input_chars = 8000
@@ -78,17 +93,29 @@ class SummarizationService:
             logger.warning(f"Input text too long ({len(text)} chars), truncating to {max_input_chars}")
             text = text[:max_input_chars] + "..."
 
+        slide_section = ""
+        if slide_content and slide_content.strip():
+            slide_section = f"""
+        Slide Content:
+        ---
+        {slide_content}
+        ---
+        """
+
         # Sanitize and construct user prompt
         sanitized_prompt = custom_prompt.strip()[:1000]  # Limit prompt length
         user_prompt = f"""
         {sanitized_prompt}
-
-        Transcription Text:
+        {slide_section}
+        Transcription Text (what the lecturer said):
         ---
         {text}
         ---
 
-        Please provide your response in Hebrew.
+        Instructions:
+        - Focus on how the transcription text relates to and explains the slide content (if available)
+        - Prioritize the lecturer's explanations, examples, or elaborations about the slide topics
+        - Please provide your response in Hebrew.
         """
 
         return await self._generate_summary(text, user_prompt)

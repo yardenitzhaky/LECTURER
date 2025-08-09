@@ -21,6 +21,7 @@ from app.services.presentation import PresentationService
 from app.services.slide_matching import SlideMatchingService
 from app.services.summarization import SummarizationService # Import the class
 from app.services.transcription import TranscriptionService
+from app.utils.ocr import extract_text_from_base64_image
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -291,6 +292,16 @@ async def summarize_slide_endpoint(
         logger.warning(f"No text to summarize for L:{lecture_id} S:{slide_index}")
         return {"summary": None, "message": "No transcription text available for this slide."}
 
+    # Extract slide content using OCR
+    slide_content = ""
+    try:
+        if slide.image_data:
+            slide_content = extract_text_from_base64_image(slide.image_data)
+            logger.info(f"Extracted {len(slide_content)} characters from slide {slide_index} using OCR")
+    except Exception as ocr_error:
+        logger.warning(f"OCR failed for slide {slide_index}: {ocr_error}")
+        slide_content = ""
+
     if not summarization_service.llm:
          logger.error("Summarization service unavailable (likely no API key)")
          raise HTTPException(status_code=503, detail="Summarization service is not configured.")
@@ -298,9 +309,9 @@ async def summarize_slide_endpoint(
     try:
         if request.custom_prompt:
             logger.info(f"Using custom prompt for L:{lecture_id} S:{slide_index}: {request.custom_prompt[:50]}...")
-            new_summary = await summarization_service.summarize_with_custom_prompt(full_slide_text, request.custom_prompt)
+            new_summary = await summarization_service.summarize_with_custom_prompt(full_slide_text, request.custom_prompt, slide_content)
         else:
-            new_summary = await summarization_service.summarize_text(full_slide_text)
+            new_summary = await summarization_service.summarize_text(full_slide_text, slide_content)
         
         if new_summary is None:
             logger.error(f"Summarization returned None for L:{lecture_id} S:{slide_index}")
