@@ -5,7 +5,7 @@ from typing import Dict, Optional
 from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.orm import Session
 
-from app import deps
+from app.utils.common import get_db
 from app.db.models import Lecture, Slide, TranscriptionSegment, User
 from app.auth import current_active_user
 from app.services.summarization import SummarizationService
@@ -24,7 +24,7 @@ async def summarize_slide_endpoint(
     lecture_id: int,
     slide_index: int,
     request: SummarizeRequest = SummarizeRequest(),
-    db: Session = Depends(deps.get_db),
+    db: Session = Depends(get_db),
     current_user: User = Depends(current_active_user)
 ) -> Dict[str, Optional[str]]:
     """Generates and saves a summary for a specific slide."""

@@ -1,10 +1,9 @@
 # app/db/models.py
-from sqlalchemy import Column, Integer, String, Float, ForeignKey, Text, DateTime, Boolean
+from sqlalchemy import Column, Integer, String, Float, ForeignKey, Text, DateTime
 from sqlalchemy.orm import relationship
-from sqlalchemy.dialects.mysql import MEDIUMTEXT, LONGTEXT
+from sqlalchemy.dialects.mysql import MEDIUMTEXT
 from fastapi_users.db import SQLAlchemyBaseUserTableUUID
 from datetime import datetime
-import uuid
 
 from app.db.base_class import Base
 
@@ -26,7 +25,6 @@ class Lecture(Base):
     title = Column(String(255))
     status = Column(String(50), index=True)
     video_path = Column(Text)
-    presentation_path = Column(String(255)) # This field is not used, consider removing or implementing it
     user_id = Column(String(36), ForeignKey("users.id"), nullable=False, index=True)
     notes = Column(Text, nullable=True)
 

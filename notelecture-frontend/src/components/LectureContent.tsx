@@ -1,9 +1,9 @@
 // src/components/LectureContent.tsx
 import React, { useMemo, useState } from 'react';
 import { FileText, Sparkles, Loader2, Copy, Check, Edit3 } from 'lucide-react';
-import { Slide, TranscriptionSegment } from '../index';
-import { formatTime } from '../format';
-import Modal from './Modal';
+import { Slide, TranscriptionSegment } from '../types';
+import { formatTime } from '../utils';
+import { Modal } from './Modal';
 
 interface LectureContentProps {
     currentSlide: Slide | undefined;

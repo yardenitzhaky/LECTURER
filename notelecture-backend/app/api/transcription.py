@@ -8,7 +8,7 @@ import aiofiles
 from fastapi import APIRouter, Form, UploadFile, File, HTTPException, BackgroundTasks, Depends
 from sqlalchemy.orm import Session
 
-from app import deps
+from app.utils.common import get_db
 from app.core.config import settings
 from app.db.models import Lecture, Slide, User
 from app.auth import current_active_user
@@ -27,7 +27,7 @@ presentation_service = PresentationService()
 @router.post("/transcribe/", status_code=202)
 async def transcribe_lecture(
     background_tasks: BackgroundTasks,
-    db: Session = Depends(deps.get_db),
+    db: Session = Depends(get_db),
     current_user: User = Depends(current_active_user),
     presentation: UploadFile = File(...),
     video: Optional[UploadFile] = File(None),

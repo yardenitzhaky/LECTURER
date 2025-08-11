@@ -2,11 +2,9 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react'; // Import useRef, useEffect, useCallback
 import { useParams, useNavigate } from 'react-router-dom';
 import { Home, AlertTriangle, Loader2 } from 'lucide-react';
-import { APIService } from '../api';
-import { useLectureData } from './useLectureData'; // Custom hook for data logic
-import { LectureHeader } from '../components/LectureHeader'; // Component 2
-import { LectureContent } from '../components/LectureContent'; // Component 3
-import { NotesSection } from '../components/NotesSection';
+import { APIService } from '../services';
+import { useLectureData } from '../hooks'; // Custom hook for data logic
+import { LectureHeader, LectureContent, NotesSection } from '../components';
 
 const DEBOUNCE_DELAY_MS = 750; // Debounce time for refresh button
 

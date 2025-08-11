@@ -1,14 +1,26 @@
-"""Authentication utility functions."""
+"""Common utility functions for authentication, database, and general purpose."""
 
 import uuid
 import secrets
-from typing import Optional
+from typing import Generator
 from passlib.context import CryptContext
+from app.db.session import SessionLocal
 
 # Password hashing context
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
+# --- Database Dependencies ---
+def get_db() -> Generator:
+    """Database dependency for FastAPI routes."""
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+# --- Authentication Utilities ---
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verify a password against its hash."""
     return pwd_context.verify(plain_password, hashed_password)

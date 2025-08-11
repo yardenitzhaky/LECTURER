@@ -1,6 +1,6 @@
 import React from 'react';
 import { Navigate } from 'react-router-dom';
-import { LoginForm } from '../components/LoginForm';
+import { LoginForm } from '../components';
 import { useAuth } from '../contexts/AuthContext';
 
 export const LoginPage: React.FC = () => {

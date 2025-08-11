@@ -1,7 +1,7 @@
 // src/hooks/useLectureData.tsx
 import { useState, useEffect, useCallback } from 'react';
-import { APIService } from '../api';
-import { Lecture } from '../index';
+import { APIService } from '../services';
+import { Lecture } from '../types';
 
 const POLLING_INTERVAL_MS = 15000;
 

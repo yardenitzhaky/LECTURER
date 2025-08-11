@@ -6,7 +6,7 @@ from typing import Dict, Any
 from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.orm import Session
 
-from app import deps
+from app.utils.common import get_db
 from app.db.models import Lecture, Slide, TranscriptionSegment, User
 from app.auth import current_active_user
 from app.api.models import UpdateLectureRequest
@@ -17,7 +17,7 @@ router = APIRouter()
 
 @router.get("/lectures/")
 async def get_user_lectures(
-    db: Session = Depends(deps.get_db),
+    db: Session = Depends(get_db),
     current_user: User = Depends(current_active_user)
 ) -> Dict[str, Any]:
     """Get all lectures for the current user."""
@@ -41,7 +41,7 @@ async def get_user_lectures(
 @router.get("/lectures/{lecture_id}/transcription")
 async def get_lecture_transcription(
     lecture_id: int,
-    db: Session = Depends(deps.get_db),
+    db: Session = Depends(get_db),
     current_user: User = Depends(current_active_user)
 ) -> Dict[str, Any]:
     """Retrieve lecture data including metadata, slides, and transcription."""
@@ -75,7 +75,7 @@ async def get_lecture_transcription(
 async def update_lecture(
     lecture_id: int,
     request: UpdateLectureRequest,
-    db: Session = Depends(deps.get_db),
+    db: Session = Depends(get_db),
     current_user: User = Depends(current_active_user)
 ) -> Dict[str, Any]:
     """Update lecture title and/or notes."""
@@ -108,7 +108,7 @@ async def update_lecture(
 @router.delete("/lectures/{lecture_id}")
 async def delete_lecture(
     lecture_id: int,
-    db: Session = Depends(deps.get_db),
+    db: Session = Depends(get_db),
     current_user: User = Depends(current_active_user)
 ) -> Dict[str, str]:
     """Delete a lecture and all its associated data."""

@@ -2,8 +2,8 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { BookOpen, FileText, Video, ArrowRight, Clock, CheckCircle, AlertCircle, Edit2, Trash2, Save, X } from 'lucide-react';
-import { APIService } from '../api';
-import type { LectureSummary } from '../index';
+import { APIService } from '../services';
+import type { LectureSummary } from '../types';
 
 export const HomePage: React.FC = () => {
   const [isVisible, setIsVisible] = useState(false);

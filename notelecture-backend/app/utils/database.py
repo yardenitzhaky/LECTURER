@@ -1,7 +1,6 @@
 """Database utility functions."""
 
 import logging
-from typing import Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 
@@ -65,33 +64,4 @@ def check_column_exists(db: Session, table_name: str, column_name: str) -> bool:
         return result.scalar() > 0
     except Exception as e:
         logger.error(f"Error checking if column {column_name} exists in table {table_name}: {e}")
-        return False
-
-
-def safe_add_column(db: Session, table_name: str, column_definition: str) -> bool:
-    """
-    Safely add a column to a table if it doesn't exist.
-    
-    Args:
-        db: Database session
-        table_name: Name of the table
-        column_definition: Full column definition (e.g., "user_id VARCHAR(36) NULL")
-        
-    Returns:
-        True if column was added or already exists, False on error
-    """
-    try:
-        column_name = column_definition.split()[0]
-        
-        if check_column_exists(db, table_name, column_name):
-            logger.info(f"Column {column_name} already exists in table {table_name}")
-            return True
-            
-        db.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {column_definition}"))
-        db.commit()
-        logger.info(f"Added column {column_name} to table {table_name}")
-        return True
-    except Exception as e:
-        logger.error(f"Error adding column to table {table_name}: {e}")
-        db.rollback()
         return False

@@ -1,6 +1,6 @@
 // src/services/api.ts
 import axios from 'axios';
-import type { Lecture, UploadResponse, APIError, TranscriptionSegment as SegmentType, SummarizeResponse, LectureSummary } from './index';
+import type { Lecture, UploadResponse, APIError, TranscriptionSegment as SegmentType, SummarizeResponse, LectureSummary } from '../types';
 
 const api = axios.create({
     baseURL: (import.meta as any).env?.VITE_API_URL || 'http://localhost:8000',
