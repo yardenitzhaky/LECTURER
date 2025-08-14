@@ -23,7 +23,7 @@ sys.path.insert(0, project_root)
 try:
     from app.core.config import settings
     from app.db.models import User, Lecture
-    from app.db.base_class import Base
+    from app.db.models import Base
     from app.utils.database import check_column_exists
     from app.utils.common import get_password_hash, generate_uuid
 except ImportError as e:

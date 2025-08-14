@@ -1,11 +1,14 @@
 # app/db/models.py
+from typing import Any
 from sqlalchemy import Column, Integer, String, Float, ForeignKey, Text, DateTime
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, DeclarativeBase
 from sqlalchemy.dialects.mysql import MEDIUMTEXT
 from fastapi_users.db import SQLAlchemyBaseUserTableUUID
 from datetime import datetime
 
-from app.db.base_class import Base
+
+class Base(DeclarativeBase):
+    id: Any
 
 class User(SQLAlchemyBaseUserTableUUID, Base):
     __tablename__ = "users"

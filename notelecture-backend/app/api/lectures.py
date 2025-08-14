@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from app.utils.common import get_db
 from app.db.models import Lecture, Slide, TranscriptionSegment, User
 from app.auth import current_active_user
-from app.api.models import UpdateLectureRequest
+from app.schemas import UpdateLectureRequest
 
 logger = logging.getLogger(__name__)
 router = APIRouter()

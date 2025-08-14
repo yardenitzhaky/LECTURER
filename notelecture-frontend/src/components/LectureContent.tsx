@@ -2,7 +2,7 @@
 import React, { useMemo, useState } from 'react';
 import { FileText, Sparkles, Loader2, Copy, Check, Edit3 } from 'lucide-react';
 import { Slide, TranscriptionSegment } from '../types';
-import { formatTime } from '../utils';
+import { formatTime } from '../utils/utils';
 import { Modal } from './Modal';
 
 interface LectureContentProps {

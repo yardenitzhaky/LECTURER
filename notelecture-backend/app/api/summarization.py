@@ -10,7 +10,7 @@ from app.db.models import Lecture, Slide, TranscriptionSegment, User
 from app.auth import current_active_user
 from app.services.summarization import SummarizationService
 from app.utils.ocr import extract_text_from_base64_image
-from app.api.models import SummarizeRequest
+from app.schemas import SummarizeRequest
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
