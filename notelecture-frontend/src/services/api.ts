@@ -1,6 +1,6 @@
 // src/services/api.ts
 import axios from 'axios';
-import type { Lecture, UploadResponse, APIError, TranscriptionSegment as SegmentType, SummarizeResponse, LectureSummary } from '../types';
+import type { Lecture, UploadResponse, APIError, TranscriptionSegment as SegmentType, SummarizeResponse, LectureSummary, SubscriptionPlan, SubscriptionStatus, UsageStats } from '../types';
 
 const api = axios.create({
     baseURL: (import.meta as any).env?.VITE_API_URL || 'http://localhost:8000',
@@ -132,6 +132,67 @@ export class APIService {
     static async deleteLecture(id: number): Promise<{ message: string }> {
         try {
             const response = await api.delete<{ message: string }>(`/api/lectures/${id}`);
+            return response.data;
+        } catch (error: unknown) {
+            if (isApiError(error)) {
+                throw error.response.data;
+            }
+            throw new Error('An unexpected error occurred');
+        }
+    }
+
+    // Subscription API methods
+    static async getSubscriptionPlans(): Promise<{ plans: SubscriptionPlan[] }> {
+        try {
+            const response = await api.get<{ plans: SubscriptionPlan[] }>('/api/subscriptions/plans');
+            return response.data;
+        } catch (error: unknown) {
+            if (isApiError(error)) {
+                throw error.response.data;
+            }
+            throw new Error('An unexpected error occurred');
+        }
+    }
+
+    static async getSubscriptionStatus(): Promise<SubscriptionStatus> {
+        try {
+            const response = await api.get<SubscriptionStatus>('/api/subscriptions/status');
+            return response.data;
+        } catch (error: unknown) {
+            if (isApiError(error)) {
+                throw error.response.data;
+            }
+            throw new Error('An unexpected error occurred');
+        }
+    }
+
+    static async subscribeToplan(planId: number): Promise<{ message: string; subscription: any }> {
+        try {
+            const response = await api.post<{ message: string; subscription: any }>(`/api/subscriptions/subscribe/${planId}`);
+            return response.data;
+        } catch (error: unknown) {
+            if (isApiError(error)) {
+                throw error.response.data;
+            }
+            throw new Error('An unexpected error occurred');
+        }
+    }
+
+    static async getUsageStats(): Promise<UsageStats> {
+        try {
+            const response = await api.get<UsageStats>('/api/subscriptions/usage');
+            return response.data;
+        } catch (error: unknown) {
+            if (isApiError(error)) {
+                throw error.response.data;
+            }
+            throw new Error('An unexpected error occurred');
+        }
+    }
+
+    static async cancelSubscription(): Promise<{ message: string }> {
+        try {
+            const response = await api.delete<{ message: string }>('/api/subscriptions/cancel');
             return response.data;
         } catch (error: unknown) {
             if (isApiError(error)) {

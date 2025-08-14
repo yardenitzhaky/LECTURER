@@ -8,6 +8,7 @@ import LectureViewPage from './pages/LectureViewPage';
 import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
 import { OAuthCallbackPage } from './pages/OAuthCallbackPage';
+import { SubscriptionPage } from './pages/SubscriptionPage';
 
 function App() {
   return (
@@ -41,6 +42,14 @@ function App() {
                 element={
                   <ProtectedRoute>
                     <LectureViewPage />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/subscription" 
+                element={
+                  <ProtectedRoute>
+                    <SubscriptionPage />
                   </ProtectedRoute>
                 } 
               />

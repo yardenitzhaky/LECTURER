@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { BookOpen, FileText, Video, ArrowRight, Clock, CheckCircle, AlertCircle, Edit2, Trash2, Save, X } from 'lucide-react';
 import { APIService } from '../services';
+import { UsageStatsComponent } from '../components';
 import type { LectureSummary } from '../types';
 
 export const HomePage: React.FC = () => {
@@ -160,7 +161,7 @@ export const HomePage: React.FC = () => {
         ) : (
           // Dashboard for users with lectures
           <div>
-            <div className="flex justify-between items-center mb-8">
+            <div className="flex justify-between items-center mb-6">
               <h1 className="text-3xl font-bold text-gray-900">My Lectures</h1>
               <Link 
                 to="/upload"
@@ -169,6 +170,11 @@ export const HomePage: React.FC = () => {
                 <Video className="h-4 w-4 mr-2" />
                 New Lecture
               </Link>
+            </div>
+
+            {/* Usage Stats Component */}
+            <div className="mb-8">
+              <UsageStatsComponent />
             </div>
 
             {loading ? (

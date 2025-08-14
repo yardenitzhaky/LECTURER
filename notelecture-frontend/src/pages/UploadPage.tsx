@@ -1,8 +1,10 @@
 // src/pages/UploadPage.tsx
-import React, { useState, ChangeEvent, FormEvent } from 'react';
+import React, { useState, useEffect, ChangeEvent, FormEvent } from 'react';
 import { Upload, FileType, Video, Clock } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { APIService } from '../services';
+import { UsageStatsComponent } from '../components';
+import type { SubscriptionStatus } from '../types';
 
 export const UploadPage: React.FC = () => {
   const navigate = useNavigate();
@@ -11,6 +13,33 @@ export const UploadPage: React.FC = () => {
   const [videoUrl, setVideoUrl] = useState<string>('');
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [error, setError] = useState<string>('');
+  const [subscriptionStatus, setSubscriptionStatus] = useState<SubscriptionStatus | null>(null);
+  const [loadingStatus, setLoadingStatus] = useState(true);
+
+  useEffect(() => {
+    loadSubscriptionStatus();
+  }, []);
+
+  const loadSubscriptionStatus = async () => {
+    try {
+      const status = await APIService.getSubscriptionStatus();
+      setSubscriptionStatus(status);
+    } catch (err) {
+      console.error('Failed to load subscription status:', err);
+    } finally {
+      setLoadingStatus(false);
+    }
+  };
+
+  const canUpload = () => {
+    if (!subscriptionStatus) return false;
+    
+    if (subscriptionStatus.has_subscription) {
+      return (subscriptionStatus.lectures_remaining || 0) > 0;
+    } else {
+      return (subscriptionStatus.free_lectures_remaining || 0) > 0;
+    }
+  };
 
   const handleVideoFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -46,6 +75,15 @@ const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
   setError('');
   
   try {
+    // Check subscription limits first
+    if (!canUpload()) {
+      if (subscriptionStatus?.has_subscription) {
+        throw new Error(`You have reached your lecture limit for your ${subscriptionStatus.plan_name} plan. Please wait for your next billing period or upgrade your plan.`);
+      } else {
+        throw new Error('You have used all your free lectures. Please subscribe to a plan to continue.');
+      }
+    }
+
     if (!presentationFile || (!videoFile && !videoUrl)) {
       throw new Error('Please provide both video (file or URL) and presentation files');
     }
@@ -83,12 +121,48 @@ const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
 
   return (
     <div className="max-w-3xl mx-auto p-4">
+      {/* Usage Stats Component */}
+      <div className="mb-6">
+        <UsageStatsComponent />
+      </div>
+
       <div className="bg-white shadow sm:rounded-lg p-6">
         <h2 className="text-2xl font-bold mb-6">Upload Your Lecture</h2>
         
         {error && (
           <div className="mb-4 p-3 bg-red-50 text-red-700 rounded-md">
             {error}
+          </div>
+        )}
+
+        {/* Subscription Warning */}
+        {!loadingStatus && subscriptionStatus && !canUpload() && (
+          <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-md">
+            <div className="flex">
+              <div className="ml-3">
+                <h3 className="text-sm font-medium text-yellow-800">
+                  Upload limit reached
+                </h3>
+                <div className="mt-2 text-sm text-yellow-700">
+                  {subscriptionStatus.has_subscription ? (
+                    <p>
+                      You have used all lectures in your {subscriptionStatus.plan_name} plan. 
+                      Your plan will reset in {subscriptionStatus.days_remaining} days, or you can 
+                      <a href="/subscription" className="font-medium text-yellow-900 hover:underline ml-1">
+                        upgrade your plan
+                      </a>.
+                    </p>
+                  ) : (
+                    <p>
+                      You have used all your free lectures (3/3). 
+                      <a href="/subscription" className="font-medium text-yellow-900 hover:underline ml-1">
+                        Subscribe to a plan
+                      </a> to continue creating lectures.
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
         )}
         
@@ -177,7 +251,7 @@ const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
           <div className="flex justify-center">
             <button
               type="submit"
-              disabled={isProcessing || (!videoFile && !videoUrl) || !presentationFile}
+              disabled={isProcessing || (!videoFile && !videoUrl) || !presentationFile || !canUpload()}
               className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isProcessing ? (

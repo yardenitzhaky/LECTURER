@@ -45,3 +45,42 @@ export interface LectureSummary {
   video_path: string;
   notes?: string;
 }
+
+export interface SubscriptionPlan {
+  id: number;
+  name: string;
+  duration_days: number;
+  price: number;
+  lecture_limit: number;
+  description: string;
+}
+
+export interface SubscriptionStatus {
+  has_subscription: boolean;
+  plan_name?: string;
+  plan_id?: number;
+  start_date?: string;
+  end_date?: string;
+  lectures_used?: number;
+  lectures_limit?: number;
+  lectures_remaining?: number;
+  days_remaining?: number;
+  is_expired?: boolean;
+  free_lectures_used?: number;
+  free_lectures_remaining?: number;
+  free_lectures_limit?: number;
+}
+
+export interface UsageStats {
+  subscription_type: 'free' | 'premium';
+  plan_name?: string;
+  lectures_used_this_period?: number;
+  lectures_limit?: number;
+  lectures_remaining?: number;
+  total_lectures_ever: number;
+  days_remaining?: number;
+  subscription_end?: string;
+  free_lectures_used?: number;
+  free_lectures_remaining?: number;
+  needs_upgrade?: boolean;
+}

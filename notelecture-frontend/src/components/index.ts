@@ -9,3 +9,4 @@ export { Modal } from './Modal';
 export { NotesSection } from './NotesSection';
 export { ProtectedRoute } from './ProtectedRoute';
 export { RegisterForm } from './RegisterForm';
+export { UsageStatsComponent } from './UsageStatsComponent';

@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.utils.common import get_db
 from app.core.config import settings
-from app.db.models import Lecture, Slide, User
+from app.db.models import Lecture, Slide, User, UserSubscription
 from app.auth import current_active_user
 from app.db.session import SessionLocal
 from app.services.presentation import PresentationService
@@ -46,6 +46,28 @@ async def transcribe_lecture(
     lecture_id = None
 
     try:
+        # Check subscription limits before processing
+        from datetime import datetime
+        now = datetime.utcnow()
+        current_sub = db.query(UserSubscription).filter(
+            UserSubscription.user_id == str(current_user.id),
+            UserSubscription.is_active == True,
+            UserSubscription.start_date <= now,
+            UserSubscription.end_date >= now
+        ).first()
+        
+        if not current_user.can_create_lecture_sync(current_sub):
+            if current_sub:
+                raise HTTPException(
+                    status_code=403, 
+                    detail=f"You have reached your lecture limit ({current_sub.plan.lecture_limit}) for your {current_sub.plan.name} plan. Please upgrade or wait for your next billing period."
+                )
+            else:
+                raise HTTPException(
+                    status_code=403,
+                    detail=f"You have reached your free lecture limit (3). Please subscribe to a plan to continue creating lectures."
+                )
+        
         # Handle presentation file
         presentation_filename = presentation.filename or "presentation"
         presentation_content = await presentation.read()
@@ -88,6 +110,13 @@ async def transcribe_lecture(
         except Exception as pres_err:
             update_lecture_status(db, lecture_id, "failed")
             raise HTTPException(status_code=500, detail=f"Error processing presentation: {pres_err}") from pres_err
+
+        # Update usage count
+        if current_sub:
+            current_sub.lectures_used += 1
+        else:
+            current_user.free_lectures_used += 1
+        db.commit()
 
         # Enqueue background task
         background_tasks.add_task(process_video_background, video_path_or_url=video_path_str, lecture_id=lecture_id, db_session_factory=SessionLocal)

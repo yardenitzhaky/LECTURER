@@ -1,11 +1,30 @@
 //src/components/Header.tsx
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { BookOpen, Upload, User, LogOut } from 'lucide-react';
+import { BookOpen, Upload, User, LogOut, Crown, CreditCard } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { APIService } from '../services';
+import type { SubscriptionStatus } from '../types';
 
 export const Header: React.FC = () => {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
+  const [subscriptionStatus, setSubscriptionStatus] = useState<SubscriptionStatus | null>(null);
+
+  useEffect(() => {
+    if (user) {
+      loadSubscriptionStatus();
+    }
+  }, [user]);
+
+  const loadSubscriptionStatus = async () => {
+    try {
+      const status = await APIService.getSubscriptionStatus();
+      setSubscriptionStatus(status);
+    } catch (err) {
+      console.error('Failed to load subscription status:', err);
+    }
+  };
 
   const handleLogoClick = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -45,6 +64,26 @@ export const Header: React.FC = () => {
                   <Upload className="h-4 w-4 mr-1" />
                   Upload Lecture
                 </Link>
+                
+                {/* Subscription Status */}
+                {subscriptionStatus && (
+                  <Link 
+                    to="/subscription" 
+                    className="flex items-center px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-all duration-200"
+                  >
+                    {subscriptionStatus.has_subscription ? (
+                      <>
+                        <Crown className="h-4 w-4 mr-1 text-yellow-500" />
+                        <span className="text-yellow-600 font-medium">{subscriptionStatus.plan_name}</span>
+                      </>
+                    ) : (
+                      <>
+                        <CreditCard className="h-4 w-4 mr-1" />
+                        <span>Free ({subscriptionStatus.free_lectures_remaining}/3)</span>
+                      </>
+                    )}
+                  </Link>
+                )}
                 
                 <div className="flex items-center space-x-2">
                   <div className="flex items-center text-sm text-gray-700">
