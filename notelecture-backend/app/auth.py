@@ -13,7 +13,7 @@ from fastapi_users.db import SQLAlchemyUserDatabase
 from httpx_oauth.clients.google import GoogleOAuth2
 
 from app.db.models import User
-from app.db.database import get_async_session
+from app.db.connection import get_async_session
 from app.core.config import settings
 
 SECRET = settings.SECRET_KEY

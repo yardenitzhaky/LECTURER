@@ -27,6 +27,9 @@ class Settings(BaseSettings):
     GOOGLE_OAUTH_CLIENT_ID: str
     GOOGLE_OAUTH_CLIENT_SECRET: str
     FRONTEND_URL: str = "http://localhost:5173"
+    
+    # Supabase settings (optional)
+    supabase_access_token: Optional[str] = None
 
     class Config:
         """

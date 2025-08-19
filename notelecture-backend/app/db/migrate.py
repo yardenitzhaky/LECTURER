@@ -22,8 +22,7 @@ sys.path.insert(0, project_root)
 
 try:
     from app.core.config import settings
-    from app.db.models import User, Lecture
-    from app.db.models import Base
+    from app.db.models import User, Lecture, SubscriptionPlan, Base
     from app.utils.database import check_column_exists
     from app.utils.common import get_password_hash, generate_uuid
 except ImportError as e:
@@ -152,12 +151,114 @@ def migrate_existing_data(engine):
             db.commit()
             logger.info(f"✅ Assigned {lectures_without_user} lectures to admin user")
         
+        # Check if free_lectures_used column exists in users table
+        if not check_column_exists(db, 'users', 'free_lectures_used'):
+            logger.info("Adding free_lectures_used column to users table...")
+            db.execute(text("ALTER TABLE users ADD COLUMN free_lectures_used INTEGER DEFAULT 0"))
+            db.commit()
+            logger.info("✅ free_lectures_used column added")
+        
+        # Initialize subscription plans if they don't exist
+        existing_plans = db.query(SubscriptionPlan).count()
+        if existing_plans == 0:
+            logger.info("Creating subscription plans...")
+            
+            plans = [
+                SubscriptionPlan(
+                    name="Weekly",
+                    duration_days=7,
+                    price=1.90,
+                    lecture_limit=10
+                ),
+                SubscriptionPlan(
+                    name="Monthly", 
+                    duration_days=30,
+                    price=5.90,
+                    lecture_limit=50
+                ),
+                SubscriptionPlan(
+                    name="6 Months",
+                    duration_days=180,
+                    price=14.90,
+                    lecture_limit=300
+                ),
+                SubscriptionPlan(
+                    name="12 Months",
+                    duration_days=365, 
+                    price=24.90,
+                    lecture_limit=750
+                )
+            ]
+            
+            for plan in plans:
+                db.add(plan)
+            
+            db.commit()
+            logger.info(f"✅ Created {len(plans)} subscription plans")
+        else:
+            logger.info(f"✅ Subscription plans already exist ({existing_plans} plans found)")
+        
     except Exception as e:
         logger.error(f"Migration failed: {e}")
         db.rollback()
         raise
     finally:
         db.close()
+
+
+def init_subscription_plans_standalone():
+    """Initialize default subscription plans as a standalone function"""
+    from app.db.connection import SessionLocal
+    
+    session = SessionLocal()
+    
+    try:
+        # Check if plans already exist
+        existing_plans = session.query(SubscriptionPlan).count()
+        if existing_plans > 0:
+            logger.info(f"Subscription plans already exist ({existing_plans} plans found)")
+            return
+        
+        # Create default subscription plans
+        plans = [
+            SubscriptionPlan(
+                name="Weekly",
+                duration_days=7,
+                price=1.90,
+                lecture_limit=10
+            ),
+            SubscriptionPlan(
+                name="Monthly", 
+                duration_days=30,
+                price=5.90,
+                lecture_limit=50
+            ),
+            SubscriptionPlan(
+                name="6 Months",
+                duration_days=180,
+                price=14.90,
+                lecture_limit=300
+            ),
+            SubscriptionPlan(
+                name="12 Months",
+                duration_days=365, 
+                price=24.90,
+                lecture_limit=750
+            )
+        ]
+        
+        for plan in plans:
+            session.add(plan)
+        
+        session.commit()
+        logger.info(f"✅ Created {len(plans)} subscription plans")
+        
+    except Exception as e:
+        session.rollback()
+        logger.error(f"Error during subscription plan initialization: {e}")
+        raise
+    finally:
+        session.close()
 
 
 def main():
@@ -183,6 +284,7 @@ def main():
         print("  ✅ Database created/verified")
         print("  ✅ All tables created/updated")
         print("  ✅ Data migrations applied")
+        print("  ✅ Subscription plans initialized")
         print("\n🔐 Default admin credentials:")
         print("  Email: admin@notelecture.ai")
         print("  Password: admin123")
@@ -194,4 +296,12 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    import sys
+    if len(sys.argv) > 1 and sys.argv[1] == "plans":
+        # Run just subscription plan initialization
+        print("🔧 Initializing subscription plans...")
+        init_subscription_plans_standalone()
+        print("✅ Subscription plans initialization complete!")
+    else:
+        # Run full migration
+        main()

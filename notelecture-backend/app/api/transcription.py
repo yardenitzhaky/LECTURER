@@ -12,7 +12,7 @@ from app.utils.common import get_db
 from app.core.config import settings
 from app.db.models import Lecture, Slide, User, UserSubscription
 from app.auth import current_active_user
-from app.db.session import SessionLocal
+from app.db.connection import SessionLocal
 from app.services.presentation import PresentationService
 from app.utils.database import update_lecture_status
 from app.api.background_tasks import process_video_background

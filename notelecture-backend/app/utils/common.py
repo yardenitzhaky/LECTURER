@@ -4,7 +4,7 @@ import uuid
 import secrets
 from typing import Generator
 from passlib.context import CryptContext
-from app.db.session import SessionLocal
+from app.db.connection import SessionLocal
 
 # Password hashing context
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
