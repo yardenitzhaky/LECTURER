@@ -7,8 +7,8 @@ python-multipart==0.0.9
 
 # Database
 SQLAlchemy==2.0.25
-PyMySQL[rsa]==1.1.1     
-aiomysql==0.2.0
+psycopg2-binary==2.9.9  # PostgreSQL adapter
+asyncpg==0.29.0         # Async PostgreSQL adapter
 cryptography>=42.0.0    
 
 # AI and Processing (Core)

@@ -13,7 +13,15 @@ engine = create_engine(settings.DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 # Async database setup
-async_database_url = settings.DATABASE_URL.replace("mysql+pymysql://", "mysql+aiomysql://")
+# Convert PostgreSQL URL for async usage
+if settings.DATABASE_URL.startswith("postgresql://"):
+    async_database_url = settings.DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://")
+elif settings.DATABASE_URL.startswith("mysql+pymysql://"):
+    # Fallback for MySQL (legacy support)
+    async_database_url = settings.DATABASE_URL.replace("mysql+pymysql://", "mysql+aiomysql://")
+else:
+    async_database_url = settings.DATABASE_URL
+
 async_engine = create_async_engine(async_database_url)
 AsyncSessionLocal = sessionmaker(async_engine, class_=AsyncSession, expire_on_commit=False)
 

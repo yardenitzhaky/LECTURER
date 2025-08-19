@@ -2,7 +2,8 @@
 from typing import Any
 from sqlalchemy import Column, Integer, String, Float, ForeignKey, Text, DateTime, Boolean, Numeric
 from sqlalchemy.orm import relationship, DeclarativeBase
-from sqlalchemy.dialects.mysql import MEDIUMTEXT
+from sqlalchemy.dialects.postgresql import UUID
+import uuid
 from fastapi_users.db import SQLAlchemyBaseUserTableUUID
 from datetime import datetime, timedelta
 
@@ -38,7 +39,7 @@ class Lecture(Base):
     title = Column(String(255))
     status = Column(String(50), index=True)
     video_path = Column(Text)
-    user_id = Column(String(36), ForeignKey("users.id"), nullable=False, index=True)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
     notes = Column(Text, nullable=True)
 
     transcription_segments = relationship(
@@ -59,9 +60,7 @@ class Slide(Base):
     id = Column(Integer, primary_key=True, index=True)
     lecture_id = Column(Integer, ForeignKey("lectures.id"), nullable=False)
     index = Column(Integer, nullable=False)
-    image_data = Column(MEDIUMTEXT) # Use the imported type directly
-    # If you need even more space, use LONGTEXT:
-    # image_data = Column(LONGTEXT)
+    image_data = Column(Text) # PostgreSQL TEXT can handle large data
 
 
     summary = Column(Text, nullable=True)
@@ -99,7 +98,7 @@ class UserSubscription(Base):
     __tablename__ = "user_subscriptions"
     
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(String(36), ForeignKey("users.id"), nullable=False, index=True)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
     plan_id = Column(Integer, ForeignKey("subscription_plans.id"), nullable=False)
     start_date = Column(DateTime, default=datetime.utcnow)
     end_date = Column(DateTime, nullable=False)

@@ -30,6 +30,8 @@ class Settings(BaseSettings):
     
     # Supabase settings (optional)
     supabase_access_token: Optional[str] = None
+    supabase_url: Optional[str] = None
+    supabase_anon_key: Optional[str] = None
 
     class Config:
         """
