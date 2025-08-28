@@ -1,0 +1,28 @@
+# External Processing Service Requirements
+# These are the heavy dependencies removed from the main Vercel backend
+# that should be installed in your external processing service
+
+# AI and Processing dependencies
+langchain==0.2.11
+langchain-openai==0.1.19
+
+# Video/Audio Processing
+moviepy==1.0.3
+yt-dlp==2023.11.16
+
+# Computer Vision
+opencv-python==4.9.0.80
+numpy==1.25.0
+
+# Document Processing  
+PyMuPDF==1.23.22
+pytesseract==0.3.10
+
+# Core dependencies (if needed in external service)
+requests==2.31.0
+python-dotenv==1.0.0
+aiofiles==23.2.1
+
+# Optional: If external service needs API capabilities
+# fastapi==0.109.0
+# uvicorn==0.27.0
