@@ -31,9 +31,11 @@ app = FastAPI(title=settings.PROJECT_NAME)
 logger.info(f"Configured logging. Starting {settings.PROJECT_NAME} application...") # Test log
 
 # --- Set up CORS ---
+# Temporary fix: Use wildcard for CORS to resolve immediate issue
+# TODO: Revert to settings.BACKEND_CORS_ORIGINS once deployment is stable
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.BACKEND_CORS_ORIGINS,
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"], # Consider restricting methods (e.g., ["GET", "POST"])
     allow_headers=["*"], # Consider restricting headers
