@@ -37,6 +37,9 @@ class Settings(BaseSettings):
     PAYPAL_CLIENT_ID: Optional[str] = None
     PAYPAL_CLIENT_SECRET: Optional[str] = None
     PAYPAL_MODE: str = "sandbox"  # sandbox or live
+    
+    # Vercel settings
+    VERCEL_TOKEN: Optional[str] = None
 
     class Config:
         """

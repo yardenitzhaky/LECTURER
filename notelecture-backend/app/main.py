@@ -33,7 +33,7 @@ logger.info(f"Configured logging. Starting {settings.PROJECT_NAME} application..
 # --- Set up CORS ---
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # Replace with specific origins in production
+    allow_origins=settings.BACKEND_CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"], # Consider restricting methods (e.g., ["GET", "POST"])
     allow_headers=["*"], # Consider restricting headers
