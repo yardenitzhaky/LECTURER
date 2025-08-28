@@ -1,10 +1,10 @@
 // src/pages/UploadPage.tsx
-import React, { useState, useEffect, ChangeEvent, FormEvent } from 'react';
+import React, { useState, ChangeEvent, FormEvent } from 'react';
 import { Upload, FileType, Video, Clock } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { APIService } from '../services';
 import { UsageStatsComponent } from '../components';
-import type { SubscriptionStatus } from '../types';
+import { useSubscription } from '../contexts/SubscriptionContext';
 
 export const UploadPage: React.FC = () => {
   const navigate = useNavigate();
@@ -13,23 +13,7 @@ export const UploadPage: React.FC = () => {
   const [videoUrl, setVideoUrl] = useState<string>('');
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [error, setError] = useState<string>('');
-  const [subscriptionStatus, setSubscriptionStatus] = useState<SubscriptionStatus | null>(null);
-  const [loadingStatus, setLoadingStatus] = useState(true);
-
-  useEffect(() => {
-    loadSubscriptionStatus();
-  }, []);
-
-  const loadSubscriptionStatus = async () => {
-    try {
-      const status = await APIService.getSubscriptionStatus();
-      setSubscriptionStatus(status);
-    } catch (err) {
-      console.error('Failed to load subscription status:', err);
-    } finally {
-      setLoadingStatus(false);
-    }
-  };
+  const { subscriptionStatus, loading: loadingStatus, refreshSubscriptionStatus } = useSubscription();
 
   const canUpload = () => {
     if (!subscriptionStatus) return false;
@@ -110,6 +94,10 @@ const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     }
 
     const response = await APIService.uploadLecture(formData);
+    
+    // Refresh subscription status to update the remaining lectures count in Header
+    await refreshSubscriptionStatus();
+    
     navigate(`/lecture/${response.lecture_id}`);
   } catch (err) {
     console.error('Error during upload:', err);

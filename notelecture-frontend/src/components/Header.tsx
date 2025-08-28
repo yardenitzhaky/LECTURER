@@ -1,30 +1,14 @@
 //src/components/Header.tsx
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { BookOpen, Upload, User, LogOut, Crown, CreditCard } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { APIService } from '../services';
-import type { SubscriptionStatus } from '../types';
+import { useSubscription } from '../contexts/SubscriptionContext';
 
 export const Header: React.FC = () => {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
-  const [subscriptionStatus, setSubscriptionStatus] = useState<SubscriptionStatus | null>(null);
-
-  useEffect(() => {
-    if (user) {
-      loadSubscriptionStatus();
-    }
-  }, [user]);
-
-  const loadSubscriptionStatus = async () => {
-    try {
-      const status = await APIService.getSubscriptionStatus();
-      setSubscriptionStatus(status);
-    } catch (err) {
-      console.error('Failed to load subscription status:', err);
-    }
-  };
+  const { subscriptionStatus } = useSubscription();
 
   const handleLogoClick = (e: React.MouseEvent) => {
     e.preventDefault();

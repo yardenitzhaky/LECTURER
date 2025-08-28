@@ -73,6 +73,24 @@ async def transcribe_lecture(
                     detail=f"You have reached your free lecture limit (3). Please subscribe to a plan to continue creating lectures."
                 )
         
+        # Increment usage count immediately after verifying limits
+        if current_sub:
+            logger.info(f"Updating subscription usage: {current_sub.lectures_used} -> {current_sub.lectures_used + 1}")
+            current_sub.lectures_used += 1
+        else:
+            # Refresh user from database to ensure we have the current session object
+            db_user = db.query(User).filter(User.id == current_user.id).first()
+            if db_user:
+                logger.info(f"Updating free lectures usage for user {current_user.id}: {db_user.free_lectures_used} -> {db_user.free_lectures_used + 1}")
+                db_user.free_lectures_used += 1
+            else:
+                logger.error(f"Could not find user {current_user.id} in database for usage update")
+                raise HTTPException(status_code=500, detail="Database error: Could not update user usage counter")
+        
+        # Commit the usage increment before processing to ensure it's persistent
+        db.commit()
+        logger.info("Usage count increment committed successfully")
+        
         # Handle presentation file
         presentation_filename = presentation.filename or "presentation"
         presentation_content = await presentation.read()
@@ -119,21 +137,9 @@ async def transcribe_lecture(
         # Enqueue background task
         background_tasks.add_task(process_video_background, video_path_or_url=video_path_str, lecture_id=lecture_id, db_session_factory=SessionLocal)
         update_lecture_status(db, lecture_id, "processing")
-
-        # Update usage count - do this last to ensure it's committed on success
-        if current_sub:
-            logger.info(f"Updating subscription usage: {current_sub.lectures_used} -> {current_sub.lectures_used + 1}")
-            current_sub.lectures_used += 1
-        else:
-            # Refresh user from database to ensure we have the current session object
-            db_user = db.query(User).filter(User.id == current_user.id).first()
-            if db_user:
-                logger.info(f"Updating free lectures usage for user {current_user.id}: {db_user.free_lectures_used} -> {db_user.free_lectures_used + 1}")
-                db_user.free_lectures_used += 1
-            else:
-                logger.error(f"Could not find user {current_user.id} in database for usage update")
+        
+        # Final commit for lecture and processing status
         db.commit()
-        logger.info("Usage count update committed successfully")
 
         return {"message": "Processing started", "lecture_id": lecture_id}
 

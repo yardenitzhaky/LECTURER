@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { APIService } from '../services/api';
 import { PayPalButton } from '../components/PayPalButton';
+import { useSubscription } from '../contexts/SubscriptionContext';
 import type { SubscriptionPlan, SubscriptionStatus } from '../types';
 
 interface PlanCardProps {
@@ -82,6 +83,7 @@ export const SubscriptionPage: React.FC = () => {
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const { refreshSubscriptionStatus } = useSubscription();
 
   useEffect(() => {
     loadData();
@@ -111,6 +113,9 @@ export const SubscriptionPage: React.FC = () => {
       // Payment has already been processed by PayPalButton component
       // Just reload data to reflect the new subscription
       await loadData();
+      
+      // Also refresh the global subscription context so Header updates
+      await refreshSubscriptionStatus();
       
       setSuccess(`Payment successful! Welcome to your new ${details.subscription?.plan_name} subscription.`);
       

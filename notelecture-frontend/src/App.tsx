@@ -1,5 +1,6 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
+import { SubscriptionProvider } from './contexts/SubscriptionContext';
 import { ProtectedRoute, Layout } from './components';
 import { WelcomePage } from './pages/WelcomePage';
 import { HomePage } from './pages/HomePage';
@@ -16,8 +17,9 @@ function App() {
   return (
     <Router>
       <AuthProvider>
-        <div className="w-full min-h-screen flex flex-col bg-gray-50">
-          <Layout>
+        <SubscriptionProvider>
+          <div className="w-full min-h-screen flex flex-col bg-gray-50">
+            <Layout>
               <Routes>
                 <Route path="/" element={<WelcomePage />} />
                 <Route path="/login" element={<LoginPage />} />
@@ -74,8 +76,9 @@ function App() {
               </Routes>
             </Layout>
           </div>
-        </AuthProvider>
-      </Router>
+        </SubscriptionProvider>
+      </AuthProvider>
+    </Router>
   );
 }
 
