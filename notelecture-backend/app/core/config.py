@@ -32,6 +32,11 @@ class Settings(BaseSettings):
     supabase_access_token: Optional[str] = None
     supabase_url: Optional[str] = None
     supabase_anon_key: Optional[str] = None
+    
+    # PayPal settings
+    PAYPAL_CLIENT_ID: Optional[str] = None
+    PAYPAL_CLIENT_SECRET: Optional[str] = None
+    PAYPAL_MODE: str = "sandbox"  # sandbox or live
 
     class Config:
         """

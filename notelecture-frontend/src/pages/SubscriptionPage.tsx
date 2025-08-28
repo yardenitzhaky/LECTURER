@@ -1,15 +1,25 @@
 import React, { useState, useEffect } from 'react';
 import { APIService } from '../services/api';
+import { PayPalButton } from '../components/PayPalButton';
 import type { SubscriptionPlan, SubscriptionStatus } from '../types';
 
 interface PlanCardProps {
   plan: SubscriptionPlan;
   currentPlanId?: number;
-  onSubscribe: (planId: number) => void;
+  onPaymentSuccess: (details: any) => void;
+  onPaymentError: (error: any) => void;
+  onPaymentCancel: () => void;
   isLoading: boolean;
 }
 
-const PlanCard: React.FC<PlanCardProps> = ({ plan, currentPlanId, onSubscribe, isLoading }) => {
+const PlanCard: React.FC<PlanCardProps> = ({ 
+  plan, 
+  currentPlanId, 
+  onPaymentSuccess, 
+  onPaymentError, 
+  onPaymentCancel, 
+  isLoading 
+}) => {
   const isCurrentPlan = currentPlanId === plan.id;
   
   return (
@@ -45,17 +55,21 @@ const PlanCard: React.FC<PlanCardProps> = ({ plan, currentPlanId, onSubscribe, i
           </ul>
         </div>
         
-        <button
-          onClick={() => onSubscribe(plan.id)}
-          disabled={isCurrentPlan || isLoading}
-          className={`mt-6 w-full rounded-md px-4 py-2 text-sm font-medium ${
-            isCurrentPlan
-              ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-              : 'bg-blue-600 text-white hover:bg-blue-700 disabled:bg-blue-300'
-          }`}
-        >
-          {isLoading ? 'Processing...' : isCurrentPlan ? 'Current Plan' : 'Subscribe'}
-        </button>
+        <div className="mt-6">
+          {isCurrentPlan ? (
+            <div className="w-full rounded-md px-4 py-2 text-sm font-medium bg-gray-100 text-gray-400 cursor-not-allowed text-center">
+              Current Plan
+            </div>
+          ) : (
+            <PayPalButton
+              plan={plan}
+              onSuccess={onPaymentSuccess}
+              onError={onPaymentError}
+              onCancel={onPaymentCancel}
+              disabled={isLoading}
+            />
+          )}
+        </div>
       </div>
     </div>
   );
@@ -65,8 +79,9 @@ export const SubscriptionPage: React.FC = () => {
   const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
   const [status, setStatus] = useState<SubscriptionStatus | null>(null);
   const [loading, setLoading] = useState(true);
-  const [subscribing, setSubscribing] = useState(false);
+  const [processing, setProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
 
   useEffect(() => {
     loadData();
@@ -88,17 +103,36 @@ export const SubscriptionPage: React.FC = () => {
     }
   };
 
-  const handleSubscribe = async (planId: number) => {
+  const handlePaymentSuccess = async (details: any) => {
     try {
-      setSubscribing(true);
+      setProcessing(true);
       setError(null);
-      await APIService.subscribeToplan(planId);
-      await loadData(); // Reload data after successful subscription
+      
+      // Payment has already been processed by PayPalButton component
+      // Just reload data to reflect the new subscription
+      await loadData();
+      
+      setSuccess(`Payment successful! Welcome to your new ${details.subscription?.plan_name} subscription.`);
+      
+      // Clear success message after 5 seconds
+      setTimeout(() => setSuccess(null), 5000);
     } catch (err: any) {
-      setError(err.detail || 'Failed to subscribe to plan');
+      setError(err.detail || 'Failed to process successful payment');
     } finally {
-      setSubscribing(false);
+      setProcessing(false);
     }
+  };
+
+  const handlePaymentError = (error: any) => {
+    console.error('Payment error:', error);
+    setError(error.detail || error.message || 'Payment failed. Please try again.');
+    setProcessing(false);
+  };
+
+  const handlePaymentCancel = () => {
+    console.log('Payment cancelled by user');
+    // Could show a message or just ignore
+    setProcessing(false);
   };
 
   const handleCancelSubscription = async () => {
@@ -135,6 +169,12 @@ export const SubscriptionPage: React.FC = () => {
       {error && (
         <div className="mb-6 rounded-md bg-red-50 border border-red-200 p-4">
           <div className="text-sm text-red-600">{error}</div>
+        </div>
+      )}
+
+      {success && (
+        <div className="mb-6 rounded-md bg-green-50 border border-green-200 p-4">
+          <div className="text-sm text-green-600">{success}</div>
         </div>
       )}
 
@@ -192,8 +232,10 @@ export const SubscriptionPage: React.FC = () => {
             key={plan.id}
             plan={plan}
             currentPlanId={status?.plan_id}
-            onSubscribe={handleSubscribe}
-            isLoading={subscribing}
+            onPaymentSuccess={handlePaymentSuccess}
+            onPaymentError={handlePaymentError}
+            onPaymentCancel={handlePaymentCancel}
+            isLoading={processing}
           />
         ))}
       </div>

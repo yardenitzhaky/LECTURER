@@ -41,3 +41,6 @@ passlib[bcrypt]==1.7.4
 # Testing
 pytest>=8.2.0
 pytest-asyncio==0.25.0
+
+# Payment Processing
+paypalrestsdk==1.13.3

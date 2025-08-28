@@ -119,3 +119,21 @@ class UserSubscription(Base):
         if self.is_expired():
             return 0
         return (self.end_date - datetime.utcnow()).days
+
+class Payment(Base):
+    __tablename__ = "payments"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
+    subscription_id = Column(Integer, ForeignKey("user_subscriptions.id"), nullable=True)
+    paypal_order_id = Column(String(255), nullable=False, unique=True, index=True)
+    paypal_payment_id = Column(String(255), nullable=True, index=True)
+    amount = Column(Numeric(10, 2), nullable=False)
+    currency = Column(String(3), default="USD")
+    status = Column(String(50), default="pending", index=True)  # pending, completed, failed, cancelled
+    created_at = Column(DateTime, default=datetime.utcnow)
+    completed_at = Column(DateTime, nullable=True)
+    
+    # Relationships
+    user = relationship("User")
+    subscription = relationship("UserSubscription")

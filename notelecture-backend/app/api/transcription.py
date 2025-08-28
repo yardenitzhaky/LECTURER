@@ -56,6 +56,11 @@ async def transcribe_lecture(
             UserSubscription.end_date >= now
         ).first()
         
+        # Log current usage before processing
+        logger.info(f"Before processing - User {current_user.id} free_lectures_used: {current_user.free_lectures_used}")
+        if current_sub:
+            logger.info(f"Before processing - Subscription {current_sub.id} lectures_used: {current_sub.lectures_used}")
+        
         if not current_user.can_create_lecture_sync(current_sub):
             if current_sub:
                 raise HTTPException(
@@ -111,16 +116,24 @@ async def transcribe_lecture(
             update_lecture_status(db, lecture_id, "failed")
             raise HTTPException(status_code=500, detail=f"Error processing presentation: {pres_err}") from pres_err
 
-        # Update usage count
-        if current_sub:
-            current_sub.lectures_used += 1
-        else:
-            current_user.free_lectures_used += 1
-        db.commit()
-
         # Enqueue background task
         background_tasks.add_task(process_video_background, video_path_or_url=video_path_str, lecture_id=lecture_id, db_session_factory=SessionLocal)
         update_lecture_status(db, lecture_id, "processing")
+
+        # Update usage count - do this last to ensure it's committed on success
+        if current_sub:
+            logger.info(f"Updating subscription usage: {current_sub.lectures_used} -> {current_sub.lectures_used + 1}")
+            current_sub.lectures_used += 1
+        else:
+            # Refresh user from database to ensure we have the current session object
+            db_user = db.query(User).filter(User.id == current_user.id).first()
+            if db_user:
+                logger.info(f"Updating free lectures usage for user {current_user.id}: {db_user.free_lectures_used} -> {db_user.free_lectures_used + 1}")
+                db_user.free_lectures_used += 1
+            else:
+                logger.error(f"Could not find user {current_user.id} in database for usage update")
+        db.commit()
+        logger.info("Usage count update committed successfully")
 
         return {"message": "Processing started", "lecture_id": lecture_id}
 

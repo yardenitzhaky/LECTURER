@@ -213,8 +213,15 @@ coverage/
 # Note: Removed project-specific exclusions that shouldn't be ignored:
 # - notelecture-backend/alembic.ini (needed for database migrations)
 # - package.json (needed for dependency management)
-CLAUDE.md
+
+# Documentation files
+*.md
+
+# Claude Code configuration
+.mcp.json
+
 notes
 notes/
 */notes/
 notelecture-backend/notes
+.mcp.json

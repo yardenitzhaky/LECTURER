@@ -201,4 +201,39 @@ export class APIService {
             throw new Error('An unexpected error occurred');
         }
     }
+
+    // PayPal payment methods
+    static async createPaymentOrder(planId: number, urls: { return_url: string; cancel_url: string }): Promise<{
+        success: boolean;
+        payment_id: string;
+        approval_url: string;
+        plan: any;
+    }> {
+        try {
+            const response = await api.post(`/api/subscriptions/create-payment/${planId}`, urls);
+            return response.data;
+        } catch (error: unknown) {
+            if (isApiError(error)) {
+                throw error.response.data;
+            }
+            throw new Error('An unexpected error occurred');
+        }
+    }
+
+    static async executePayment(paymentData: { payment_id: string; payer_id: string }): Promise<{
+        success: boolean;
+        message: string;
+        subscription: any;
+        payment: any;
+    }> {
+        try {
+            const response = await api.post('/api/subscriptions/payments/execute', paymentData);
+            return response.data;
+        } catch (error: unknown) {
+            if (isApiError(error)) {
+                throw error.response.data;
+            }
+            throw new Error('An unexpected error occurred');
+        }
+    }
 }

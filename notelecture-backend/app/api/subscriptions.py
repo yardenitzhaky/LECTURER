@@ -3,15 +3,26 @@ import logging
 from typing import Dict, Any, List
 from datetime import datetime, timedelta
 
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Request
 from sqlalchemy.orm import Session
+from pydantic import BaseModel
 
 from app.utils.common import get_db
-from app.db.models import SubscriptionPlan, UserSubscription, User, Lecture
+from app.db.models import SubscriptionPlan, UserSubscription, User, Lecture, Payment
 from app.auth import current_active_user
+from app.services.paypal import paypal_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+# Pydantic models for payment requests
+class PaymentRequest(BaseModel):
+    return_url: str
+    cancel_url: str
+
+class PaymentExecuteRequest(BaseModel):
+    payment_id: str
+    payer_id: str
 
 
 @router.get("/subscriptions/plans")
@@ -78,13 +89,14 @@ async def get_subscription_status(
         raise HTTPException(status_code=500, detail=f"Error retrieving subscription status: {str(e)}")
 
 
-@router.post("/subscriptions/subscribe/{plan_id}")
-async def subscribe_to_plan(
+@router.post("/subscriptions/create-payment/{plan_id}")
+async def create_payment_order(
     plan_id: int,
+    payment_request: PaymentRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(current_active_user)
 ) -> Dict[str, Any]:
-    """Subscribe user to a plan (without payment processing for now)."""
+    """Create a PayPal payment order for a subscription plan."""
     try:
         # Get the plan
         plan = db.query(SubscriptionPlan).filter(
@@ -110,6 +122,71 @@ async def subscribe_to_plan(
                 detail="You already have an active subscription"
             )
         
+        # Create PayPal payment order
+        payment_result = paypal_service.create_payment_order(
+            user=current_user,
+            plan=plan,
+            return_url=payment_request.return_url,
+            cancel_url=payment_request.cancel_url
+        )
+        
+        if payment_result["success"]:
+            return {
+                "success": True,
+                "payment_id": payment_result["payment_id"],
+                "approval_url": payment_result["approval_url"],
+                "plan": {
+                    "name": plan.name,
+                    "price": float(plan.price),
+                    "duration_days": plan.duration_days,
+                    "lecture_limit": plan.lecture_limit
+                }
+            }
+        else:
+            logger.error(f"PayPal payment creation failed: {payment_result['error']}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to create payment order: {payment_result['error']}"
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error creating payment for user {current_user.id}, plan {plan_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error creating payment: {str(e)}")
+
+
+@router.post("/payments/execute")
+async def execute_payment(
+    payment_execute: PaymentExecuteRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(current_active_user)
+) -> Dict[str, Any]:
+    """Execute/capture PayPal payment and activate subscription."""
+    try:
+        # Execute PayPal payment
+        execution_result = paypal_service.execute_payment(
+            payment_id=payment_execute.payment_id,
+            payer_id=payment_execute.payer_id
+        )
+        
+        if not execution_result["success"]:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Payment execution failed: {execution_result['error']}"
+            )
+        
+        payment_record = execution_result["payment_record"]
+        
+        # Get the plan from the payment record's amount
+        # We need to find which plan matches the payment amount
+        plan = db.query(SubscriptionPlan).filter(
+            SubscriptionPlan.price == payment_record.amount,
+            SubscriptionPlan.is_active == True
+        ).first()
+        
+        if not plan:
+            raise HTTPException(status_code=404, detail="Subscription plan not found for payment amount")
+        
         # Deactivate any existing subscriptions
         existing_subs = db.query(UserSubscription).filter(
             UserSubscription.user_id == str(current_user.id)
@@ -131,25 +208,35 @@ async def subscribe_to_plan(
         )
         
         db.add(new_subscription)
+        
+        # Link payment to subscription
+        payment_record.subscription_id = new_subscription.id
+        
         db.commit()
         
-        logger.info(f"User {current_user.id} subscribed to plan {plan.name}")
+        logger.info(f"User {current_user.id} payment executed and subscribed to plan {plan.name}")
         
         return {
-            "message": "Successfully subscribed to plan",
+            "success": True,
+            "message": "Payment successful and subscription activated",
             "subscription": {
                 "plan_name": plan.name,
                 "start_date": start_date.isoformat(),
                 "end_date": end_date.isoformat(),
                 "lectures_limit": plan.lecture_limit
+            },
+            "payment": {
+                "payment_id": payment_record.paypal_order_id,
+                "amount": float(payment_record.amount),
+                "status": payment_record.status
             }
         }
     except HTTPException:
         raise
     except Exception as e:
         db.rollback()
-        logger.error(f"Error subscribing user {current_user.id} to plan {plan_id}: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Error processing subscription: {str(e)}")
+        logger.error(f"Error executing payment for user {current_user.id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error processing payment: {str(e)}")
 
 
 @router.get("/subscriptions/usage")
@@ -231,3 +318,41 @@ async def cancel_subscription(
         db.rollback()
         logger.error(f"Error cancelling subscription for user {current_user.id}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error cancelling subscription: {str(e)}")
+
+
+@router.post("/payments/webhook")
+async def paypal_webhook(
+    request: Request,
+    db: Session = Depends(get_db)
+) -> Dict[str, str]:
+    """Handle PayPal webhook notifications."""
+    try:
+        # Get request body and headers
+        body = await request.body()
+        headers = dict(request.headers)
+        
+        # Verify webhook signature (simplified)
+        if not paypal_service.verify_webhook(headers, body.decode()):
+            raise HTTPException(status_code=401, detail="Invalid webhook signature")
+        
+        # Parse webhook data
+        import json
+        webhook_data = json.loads(body.decode())
+        
+        event_type = webhook_data.get('event_type')
+        resource = webhook_data.get('resource', {})
+        
+        # Process the webhook
+        success = paypal_service.process_webhook(event_type, resource)
+        
+        if success:
+            return {"status": "success"}
+        else:
+            raise HTTPException(status_code=400, detail="Webhook processing failed")
+            
+    except json.JSONDecodeError:
+        logger.error("Invalid JSON in webhook body")
+        raise HTTPException(status_code=400, detail="Invalid JSON")
+    except Exception as e:
+        logger.error(f"Error processing PayPal webhook: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Webhook processing error")

@@ -19,6 +19,14 @@ def get_db() -> Generator:
     finally:
         db.close()
 
+def get_db_sync():
+    """Synchronous database session for PayPal service."""
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
 
 # --- Authentication Utilities ---
 def verify_password(plain_password: str, hashed_password: str) -> bool:
