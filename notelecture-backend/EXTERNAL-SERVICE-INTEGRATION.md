@@ -36,10 +36,11 @@ Frontend → Vercel Backend → External Processing Service
 ## Implementation Steps
 
 ### Step 1: Create External Processing Service
-Create a new service (e.g., using Docker, AWS Lambda with larger limits, or a VPS) with:
+Create a Google Cloud Run service with:
 - Python 3.11+
-- Install dependencies from `external-service-requirements.txt`
-- Implement API endpoints for each processing function
+- Docker container with dependencies from `external-service-requirements.txt`
+- FastAPI endpoints for each processing function
+- Container registry for deployment
 
 ### Step 2: Recommended External Service Structure
 ```python
@@ -85,7 +86,7 @@ Add environment variables to your Vercel deployment:
 
 ```bash
 # In your Vercel environment variables
-EXTERNAL_SERVICE_URL=https://your-external-service.com
+EXTERNAL_SERVICE_URL=https://your-service-name-12345-uc.a.run.app
 EXTERNAL_SERVICE_API_KEY=your-api-key  # Optional for authentication
 ```
 
@@ -136,27 +137,87 @@ Implement proper error handling and fallbacks:
 2. Test the full flow: upload → process → display
 3. Test error scenarios and timeouts
 
-## Deployment Options for External Service
+## Google Cloud Run Deployment Guide
 
-### Option 1: AWS Lambda (with container support)
-- Use AWS Lambda with container images for larger memory/timeout limits
-- Deploy using AWS SAM or CDK
-- Benefits: Serverless, auto-scaling, pay-per-use
+### Prerequisites
+1. Google Cloud account with billing enabled
+2. Google Cloud CLI (`gcloud`) installed
+3. Docker installed locally
+4. Enable Container Registry and Cloud Run APIs
 
-### Option 2: Google Cloud Run
-- Container-based serverless platform
-- Better for longer-running tasks than Vercel
-- Benefits: Serverless, better resource limits
+### Deployment Steps
 
-### Option 3: Railway/Render
-- Simple deployment platforms
-- Good for quick deployment
-- Benefits: Easy setup, reasonable pricing
+#### 1. Create Dockerfile
+Create `external_service/Dockerfile`:
+```dockerfile
+FROM python:3.11-slim
 
-### Option 4: VPS/Dedicated Server
-- Full control over environment
-- Use Docker for containerization
-- Benefits: Maximum flexibility, consistent performance
+# Install system dependencies for OpenCV and other packages
+RUN apt-get update && apt-get install -y \
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender-dev \
+    libgomp1 \
+    libgthread-2.0-0 \
+    libavcodec-dev \
+    libavformat-dev \
+    libswscale-dev \
+    libgtk2.0-dev \
+    pkg-config \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+COPY external-service-requirements.txt .
+RUN pip install --no-cache-dir -r external-service-requirements.txt
+
+COPY . .
+EXPOSE 8080
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]
+```
+
+#### 2. Update requirements.txt
+Add to `external_service/external-service-requirements.txt`:
+```txt
+fastapi==0.109.0
+uvicorn==0.27.0
+# ... existing dependencies from your requirements file
+```
+
+#### 3. Build and Deploy
+```bash
+# Set your Google Cloud project
+gcloud config set project YOUR_PROJECT_ID
+
+# Build container image
+gcloud builds submit --tag gcr.io/YOUR_PROJECT_ID/external-service
+
+# Deploy to Cloud Run
+gcloud run deploy external-service \
+    --image gcr.io/YOUR_PROJECT_ID/external-service \
+    --platform managed \
+    --region us-central1 \
+    --allow-unauthenticated \
+    --memory 2Gi \
+    --cpu 2 \
+    --timeout 900 \
+    --max-instances 10
+```
+
+#### 4. Configure Environment Variables
+```bash
+gcloud run services update external-service \
+    --set-env-vars "ENVIRONMENT=production" \
+    --region us-central1
+```
+
+### Benefits of Google Cloud Run
+- **Pay-per-use**: Only pay when processing requests
+- **Auto-scaling**: Scales to zero when idle, up to 1000 concurrent requests
+- **Container support**: Full Python dependency support
+- **Managed**: No server management required
+- **Global**: Deploy in multiple regions
+- **Cost-effective**: ~$2-10/month for typical usage
 
 ## Security Considerations
 1. Use API keys for authentication between services
@@ -177,8 +238,16 @@ Implement proper error handling and fallbacks:
 - Consider using cloud storage (S3, GCS) as intermediate storage
 - Clean up temporary files after processing
 
-## Cost Optimization
-1. Use appropriate instance sizes for workload
-2. Implement caching where possible
-3. Consider batch processing for multiple files
-4. Monitor usage patterns and scale accordingly
+## Cost Optimization for Google Cloud Run
+1. **Right-size resources**: Start with 1 CPU/1GB RAM, increase if needed
+2. **Set max instances**: Limit concurrent instances to control costs
+3. **Use request timeout**: Set appropriate timeout (900s max)
+4. **Monitor usage**: Use Cloud Monitoring to track requests and costs
+5. **Implement caching**: Cache processed results to reduce duplicate processing
+6. **Batch processing**: Process multiple files in single request when possible
+
+## Troubleshooting
+- **Container build fails**: Check system dependencies in Dockerfile
+- **Timeout errors**: Increase timeout or optimize processing
+- **Memory errors**: Increase memory allocation (up to 8GB available)
+- **Cold starts**: Consider keeping 1 instance warm with min-instances=1
