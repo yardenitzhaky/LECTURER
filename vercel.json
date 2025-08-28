@@ -1,5 +1,0 @@
-{
-  "buildCommand": "cd notelecture-frontend && npm install && npm run build",
-  "outputDirectory": "notelecture-frontend/dist",
-  "installCommand": "npm install --prefix notelecture-frontend"
-}
