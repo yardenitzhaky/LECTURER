@@ -61,8 +61,19 @@ fastapi_users = FastAPIUsers[User, uuid.UUID](get_user_manager, [auth_backend])
 
 current_active_user = fastapi_users.current_user(active=True)
 
-# Google OAuth2 client
+# Google OAuth2 client with custom httpx configuration for Vercel
+import httpx
+
+# Create custom httpx client for OAuth to handle Vercel network issues
+oauth_httpx_client = httpx.AsyncClient(
+    timeout=httpx.Timeout(30.0, connect=10.0),
+    limits=httpx.Limits(max_keepalive_connections=5, max_connections=10),
+    follow_redirects=True,
+    transport=httpx.AsyncHTTPTransport(retries=3)
+)
+
 google_oauth_client = GoogleOAuth2(
     settings.GOOGLE_OAUTH_CLIENT_ID,
     settings.GOOGLE_OAUTH_CLIENT_SECRET,
+    httpx_client=oauth_httpx_client
 )

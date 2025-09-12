@@ -82,8 +82,17 @@ async def google_callback(
                 logger.info(f"Extracted token from dict: {token_to_use[:20] if token_to_use else 'None'}...")
             
             # Use timeout and retry logic for better reliability
-            timeout_config = httpx.Timeout(10.0, connect=5.0)
-            async with httpx.AsyncClient(timeout=timeout_config) as client:
+            # Configure client for Vercel environment
+            timeout_config = httpx.Timeout(30.0, connect=10.0)
+            limits = httpx.Limits(max_keepalive_connections=5, max_connections=10)
+            
+            # Use IPv4 only to avoid IPv6 issues in Vercel
+            async with httpx.AsyncClient(
+                timeout=timeout_config,
+                limits=limits,
+                follow_redirects=True,
+                transport=httpx.AsyncHTTPTransport(retries=3)
+            ) as client:
                 response = await client.get(
                     "https://www.googleapis.com/oauth2/v2/userinfo",
                     headers={"Authorization": f"Bearer {token_to_use}"}
@@ -101,9 +110,18 @@ async def google_callback(
                 if not user_email:
                     raise HTTPException(status_code=400, detail="No email received from Google")
                     
-        except httpx.ConnectError as e:
+        except (httpx.ConnectError, OSError) as e:
             logger.error(f"Network connection error during user info fetch: {e}")
-            raise HTTPException(status_code=500, detail="Network error during authentication")
+            # Try alternative approach using the OAuth client's built-in method
+            try:
+                logger.info("Attempting fallback user info fetch using OAuth client")
+                user_data = await google_oauth_client.get_id_email(token_to_use)
+                user_email = user_data.get("email")
+                user_id = user_data.get("id")
+                logger.info(f"Fallback successful, got user info: {user_email}")
+            except Exception as fallback_error:
+                logger.error(f"Fallback also failed: {fallback_error}")
+                raise HTTPException(status_code=500, detail="Network error during authentication")
         except httpx.TimeoutException as e:
             logger.error(f"Timeout error during user info fetch: {e}")
             raise HTTPException(status_code=500, detail="Authentication timeout")
