@@ -81,52 +81,42 @@ async def google_callback(
                 token_to_use = access_token.get("access_token")
                 logger.info(f"Extracted token from dict: {token_to_use[:20] if token_to_use else 'None'}...")
             
-            # Use timeout and retry logic for better reliability
-            # Configure client for Vercel environment
-            timeout_config = httpx.Timeout(30.0, connect=10.0)
-            limits = httpx.Limits(max_keepalive_connections=5, max_connections=10)
+            # Try using the OAuth client's built-in method first (more reliable)
+            logger.info("Fetching user info using OAuth client method")
+            user_data = await google_oauth_client.get_id_email(token_to_use)
+            user_email = user_data.get("email")
+            user_id = user_data.get("id")
+            logger.info(f"Got user info from Google: {user_email}")
             
-            # Use IPv4 only to avoid IPv6 issues in Vercel
-            async with httpx.AsyncClient(
-                timeout=timeout_config,
-                limits=limits,
-                follow_redirects=True,
-                transport=httpx.AsyncHTTPTransport(retries=3)
-            ) as client:
-                response = await client.get(
+            if not user_email:
+                # Fallback to direct API call if no email from built-in method
+                logger.info("No email from built-in method, trying direct API call")
+                
+                # Use urllib instead of httpx to avoid connection issues
+                import urllib.request
+                import json
+                
+                req = urllib.request.Request(
                     "https://www.googleapis.com/oauth2/v2/userinfo",
                     headers={"Authorization": f"Bearer {token_to_use}"}
                 )
                 
-                if response.status_code != 200:
-                    logger.error(f"UserInfo API error: {response.status_code} - {response.text}")
-                    raise HTTPException(status_code=400, detail="Failed to get user info from Google")
-                
-                user_data = response.json()
-                user_email = user_data.get("email")
-                user_id = user_data.get("id")
-                logger.info(f"Got user info from Google: {user_email}")
-                
-                if not user_email:
-                    raise HTTPException(status_code=400, detail="No email received from Google")
+                try:
+                    with urllib.request.urlopen(req, timeout=30) as response:
+                        user_data = json.loads(response.read().decode())
+                        user_email = user_data.get("email")
+                        user_id = user_data.get("id")
+                        logger.info(f"Got user info via urllib: {user_email}")
+                except Exception as urllib_error:
+                    logger.error(f"urllib request failed: {urllib_error}")
+                    raise HTTPException(status_code=500, detail="Failed to fetch user info")
+            
+            if not user_email:
+                raise HTTPException(status_code=400, detail="No email received from Google")
                     
-        except (httpx.ConnectError, OSError) as e:
-            logger.error(f"Network connection error during user info fetch: {e}")
-            # Try alternative approach using the OAuth client's built-in method
-            try:
-                logger.info("Attempting fallback user info fetch using OAuth client")
-                user_data = await google_oauth_client.get_id_email(token_to_use)
-                user_email = user_data.get("email")
-                user_id = user_data.get("id")
-                logger.info(f"Fallback successful, got user info: {user_email}")
-            except Exception as fallback_error:
-                logger.error(f"Fallback also failed: {fallback_error}")
-                raise HTTPException(status_code=500, detail="Network error during authentication")
-        except httpx.TimeoutException as e:
-            logger.error(f"Timeout error during user info fetch: {e}")
-            raise HTTPException(status_code=500, detail="Authentication timeout")
         except Exception as e:
-            logger.error(f"Unexpected error during user info fetch: {e}")
+            logger.error(f"Error during user info fetch: {e}")
+            logger.error(f"Error type: {type(e)}")
             raise HTTPException(status_code=500, detail="Authentication error")
         
         # Get or create user
