@@ -1,5 +1,8 @@
 # app/api/oauth.py
 import logging
+import urllib.request
+import urllib.error
+import json
 from fastapi import APIRouter, Request, Depends, HTTPException
 from fastapi.responses import RedirectResponse
 from httpx_oauth.oauth2 import OAuth2RequestError
@@ -69,8 +72,10 @@ async def google_callback(
         logger.info(f"Access token type: {type(access_token)}")
         logger.info(f"Access token (first 20 chars): {str(access_token)[:20]}...")
         
-        # Get user info from Google using UserInfo endpoint instead of People API
-        import httpx
+        # Get user info from Google - bypass httpx issues by using urllib directly
+        import urllib.request
+        import json
+        
         user_email = None
         user_id = None
         
@@ -81,41 +86,47 @@ async def google_callback(
                 token_to_use = access_token.get("access_token")
                 logger.info(f"Extracted token from dict: {token_to_use[:20] if token_to_use else 'None'}...")
             
-            # Try using the OAuth client's built-in method first (more reliable)
-            logger.info("Fetching user info using OAuth client method")
-            user_data = await google_oauth_client.get_id_email(token_to_use)
-            user_email = user_data.get("email")
-            user_id = user_data.get("id")
-            logger.info(f"Got user info from Google: {user_email}")
+            # Use urllib directly to avoid httpx network issues in Vercel
+            logger.info("Fetching user info using urllib (bypassing httpx)")
             
-            if not user_email:
-                # Fallback to direct API call if no email from built-in method
-                logger.info("No email from built-in method, trying direct API call")
-                
-                # Use urllib instead of httpx to avoid connection issues
-                import urllib.request
-                import json
-                
-                req = urllib.request.Request(
-                    "https://www.googleapis.com/oauth2/v2/userinfo",
-                    headers={"Authorization": f"Bearer {token_to_use}"}
-                )
-                
-                try:
-                    with urllib.request.urlopen(req, timeout=30) as response:
+            req = urllib.request.Request(
+                "https://www.googleapis.com/oauth2/v2/userinfo",
+                headers={
+                    "Authorization": f"Bearer {token_to_use}",
+                    "User-Agent": "NoteLecture/1.0"
+                }
+            )
+            
+            try:
+                with urllib.request.urlopen(req, timeout=30) as response:
+                    if response.status == 200:
                         user_data = json.loads(response.read().decode())
                         user_email = user_data.get("email")
                         user_id = user_data.get("id")
-                        logger.info(f"Got user info via urllib: {user_email}")
-                except Exception as urllib_error:
-                    logger.error(f"urllib request failed: {urllib_error}")
-                    raise HTTPException(status_code=500, detail="Failed to fetch user info")
+                        logger.info(f"Successfully got user info via urllib: {user_email}")
+                    else:
+                        logger.error(f"UserInfo API returned status: {response.status}")
+                        raise HTTPException(status_code=400, detail="Failed to get user info from Google")
+            except urllib.error.HTTPError as http_err:
+                logger.error(f"HTTP error when fetching user info: {http_err.code} - {http_err.reason}")
+                logger.error(f"Response body: {http_err.read().decode()}")
+                raise HTTPException(status_code=400, detail=f"Google API error: {http_err.reason}")
+            except urllib.error.URLError as url_err:
+                logger.error(f"URL error when fetching user info: {url_err.reason}")
+                raise HTTPException(status_code=500, detail="Network error connecting to Google")
+            except Exception as e:
+                logger.error(f"Unexpected error with urllib: {e}")
+                raise HTTPException(status_code=500, detail="Failed to fetch user info")
             
             if not user_email:
+                logger.error("No email in user data response")
                 raise HTTPException(status_code=400, detail="No email received from Google")
                     
+        except HTTPException:
+            # Re-raise HTTP exceptions
+            raise
         except Exception as e:
-            logger.error(f"Error during user info fetch: {e}")
+            logger.error(f"Unexpected error during user info fetch: {e}")
             logger.error(f"Error type: {type(e)}")
             raise HTTPException(status_code=500, detail="Authentication error")
         
