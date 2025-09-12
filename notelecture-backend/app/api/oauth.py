@@ -71,30 +71,45 @@ async def google_callback(
         
         # Get user info from Google using UserInfo endpoint instead of People API
         import httpx
-        async with httpx.AsyncClient() as client:
+        user_email = None
+        user_id = None
+        
+        try:
             # The access_token might be a dict with token info, let's check
             token_to_use = access_token
             if isinstance(access_token, dict):
                 token_to_use = access_token.get("access_token")
                 logger.info(f"Extracted token from dict: {token_to_use[:20] if token_to_use else 'None'}...")
             
-            response = await client.get(
-                "https://www.googleapis.com/oauth2/v2/userinfo",
-                headers={"Authorization": f"Bearer {token_to_use}"}
-            )
-            logger.info(f"UserInfo request headers: {response.request.headers}")
-            
-            if response.status_code != 200:
-                logger.error(f"UserInfo API error: {response.status_code} - {response.text}")
-                raise HTTPException(status_code=400, detail="Failed to get user info from Google")
-            
-            user_data = response.json()
-            user_email = user_data.get("email")
-            user_id = user_data.get("id")
-            logger.info(f"Got user info from Google: {user_email}")
-            
-            if not user_email:
-                raise HTTPException(status_code=400, detail="No email received from Google")
+            # Use timeout and retry logic for better reliability
+            timeout_config = httpx.Timeout(10.0, connect=5.0)
+            async with httpx.AsyncClient(timeout=timeout_config) as client:
+                response = await client.get(
+                    "https://www.googleapis.com/oauth2/v2/userinfo",
+                    headers={"Authorization": f"Bearer {token_to_use}"}
+                )
+                
+                if response.status_code != 200:
+                    logger.error(f"UserInfo API error: {response.status_code} - {response.text}")
+                    raise HTTPException(status_code=400, detail="Failed to get user info from Google")
+                
+                user_data = response.json()
+                user_email = user_data.get("email")
+                user_id = user_data.get("id")
+                logger.info(f"Got user info from Google: {user_email}")
+                
+                if not user_email:
+                    raise HTTPException(status_code=400, detail="No email received from Google")
+                    
+        except httpx.ConnectError as e:
+            logger.error(f"Network connection error during user info fetch: {e}")
+            raise HTTPException(status_code=500, detail="Network error during authentication")
+        except httpx.TimeoutException as e:
+            logger.error(f"Timeout error during user info fetch: {e}")
+            raise HTTPException(status_code=500, detail="Authentication timeout")
+        except Exception as e:
+            logger.error(f"Unexpected error during user info fetch: {e}")
+            raise HTTPException(status_code=500, detail="Authentication error")
         
         # Get or create user
         try:
