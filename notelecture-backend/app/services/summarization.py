@@ -1,38 +1,32 @@
 # notelecture-backend/app/services/summarization.py
 import logging
-from langchain_openai import ChatOpenAI
-from langchain.schema import HumanMessage, SystemMessage
+import httpx
+import json
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
 class SummarizationService:
     def __init__(self):
-        self.llm: ChatOpenAI | None = None 
-        if not settings.openai_api_key or settings.openai_api_key == "YOUR_OPENAI_API_KEY":
+        self.api_key = settings.openai_api_key
+        self.model = "gpt-3.5-turbo"
+        self.temperature = 0.6
+        self.max_tokens = 350
+        self.base_url = "https://api.openai.com/v1/chat/completions"
+        
+        if not self.api_key or self.api_key == "YOUR_OPENAI_API_KEY":
             logger.warning("OpenAI API Key not configured. Summarization will be skipped.")
+            self.api_key = None
         else:
-            try:
-                self.llm = ChatOpenAI(
-                    model="gpt-3.5-turbo",
-                    openai_api_key=settings.openai_api_key,
-                    temperature=0.6,
-                    max_tokens=350,
-                    request_timeout=60
-                )
-                logger.info("LangChain ChatOpenAI initialized successfully.")
-
-            except Exception as e:
-                logger.error(f"Failed to initialize LangChain ChatOpenAI: {e}", exc_info=True)
-                self.llm = None 
+            logger.info("OpenAI API client initialized successfully.") 
 
     async def summarize_text(self, text: str, slide_content: str = None, max_length: int = 75) -> str | None:
         """
-        Generates a summary for the given text using LangChain ChatOpenAI.
+        Generates a summary for the given text using OpenAI API.
         Returns the summary string or None if summarization fails or is skipped.
         """
-        if not self.llm:
-            logger.info("Skipping summarization as LangChain ChatOpenAI is not initialized.")
+        if not self.api_key:
+            logger.info("Skipping summarization as OpenAI API key is not configured.")
             return None
         if not text or text.strip() == "":
             logger.info("Skipping summarization for empty text.")
@@ -77,8 +71,8 @@ class SummarizationService:
         Generates a summary for the given text using a custom user-provided prompt.
         Returns the summary string or None if summarization fails or is skipped.
         """
-        if not self.llm:
-            logger.info("Skipping summarization as LangChain ChatOpenAI is not initialized.")
+        if not self.api_key:
+            logger.info("Skipping summarization as OpenAI API key is not configured.")
             return None
         if not text or text.strip() == "":
             logger.info("Skipping summarization for empty text.")
@@ -125,25 +119,43 @@ class SummarizationService:
         Private method to generate summary using the provided prompt.
         """
         try:
-            logger.info(f"Requesting summary from LangChain ChatOpenAI for text snippet starting with: '{text[:100]}...'")
+            logger.info(f"Requesting summary from OpenAI API for text snippet starting with: '{text[:100]}...'")
             
-            messages = [
-                SystemMessage(content="You are a helpful assistant skilled in summarizing lecture content."),
-                HumanMessage(content=user_prompt)
-            ]
+            headers = {
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json"
+            }
             
-            response = await self.llm.ainvoke(messages)
+            payload = {
+                "model": self.model,
+                "messages": [
+                    {"role": "system", "content": "You are a helpful assistant skilled in summarizing lecture content."},
+                    {"role": "user", "content": user_prompt}
+                ],
+                "temperature": self.temperature,
+                "max_tokens": self.max_tokens
+            }
+            
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                response = await client.post(self.base_url, headers=headers, json=payload)
+                response.raise_for_status()
+                
+                result = response.json()
+                
+                if result and "choices" in result and len(result["choices"]) > 0:
+                    content = result["choices"][0]["message"]["content"]
+                    summary = content.strip().replace("Summary:", "").strip()
+                    logger.info(f"Received summary: '{summary[:100]}...'")
+                    return summary
+                else:
+                    logger.warning("OpenAI API response content was empty.")
+                    return None
 
-            if response and response.content:
-                summary = response.content.strip().replace("Summary:", "").strip()
-                logger.info(f"Received summary: '{summary[:100]}...'")
-                return summary
-            else:
-                logger.warning("LangChain response content was empty.")
-                return None
-
+        except httpx.HTTPError as e:
+            logger.error(f"HTTP error calling OpenAI API: {e}", exc_info=True)
+            return None
         except Exception as e:
-            logger.error(f"Error calling LangChain ChatOpenAI for summarization: {e}", exc_info=True)
+            logger.error(f"Error calling OpenAI API for summarization: {e}", exc_info=True)
             return None
 
 # Instantiate the service for use in other modules

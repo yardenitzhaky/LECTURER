@@ -12,9 +12,9 @@ psycopg2-binary==2.9.9  # PostgreSQL adapter
 asyncpg==0.29.0         # Async PostgreSQL adapter
 cryptography>=42.0.0    
 
-# AI and Processing (Core only - heavy deps moved to external service)
-langchain==0.2.11
-langchain-openai==0.1.19
+# AI and Processing (MOVED TO EXTERNAL SERVICE)
+# REMOVED: langchain==0.2.11 (now in external service - very large dependency)
+# REMOVED: langchain-openai==0.1.19 (now in external service)
 # REMOVED: moviepy==1.0.3 (now in external service)
 # REMOVED: numpy==1.25.0 (now in external service) 
 # REMOVED: opencv-python==4.9.0.80 (now in external service)
@@ -29,7 +29,7 @@ httpx==0.27.0
 # File Handling (Light only)
 aiofiles==23.2.1         
 Pillow==10.4.0           
-python-pptx==0.6.21
+# REMOVED: python-pptx==0.6.21 (PowerPoint support not implemented yet)
 
 # Utilities
 python-dotenv==1.0.0     
@@ -39,9 +39,9 @@ pydantic-settings==2.1.0
 fastapi-users[sqlalchemy,oauth]==13.0.0
 passlib[bcrypt]==1.7.4
 
-# Testing
-pytest>=8.2.0
-pytest-asyncio==0.25.0
+# Testing (REMOVED for production deployment to reduce size)
+# REMOVED: pytest>=8.2.0 (dev dependency)
+# REMOVED: pytest-asyncio==0.25.0 (dev dependency)
 
 # Payment Processing
 paypalrestsdk==1.13.3
