@@ -61,28 +61,22 @@ class SupabaseHTTPClient:
             print(f"Error getting user by email: {e}")
             return None
     
-    async def create_user(self, email: str) -> Dict:
-        """Create a new user for OAuth"""
+    async def create_oauth_user(self, email: str) -> Dict:
+        """Create or get OAuth user using database function"""
         try:
-            user_id = str(uuid.uuid4())
+            # Use the database function that bypasses RLS
+            endpoint = f"rpc/create_oauth_user"
+            data = {"user_email": email}
             
-            # Create a simple hash for OAuth users  
-            simple_hash = hashlib.sha256(f"oauth_{email}".encode()).hexdigest()
-            
-            user_data = {
-                "id": user_id,
-                "email": email,
-                "hashed_password": simple_hash,
-                "is_active": True,
-                "is_verified": True,
-                "created_at": "now()"
-            }
-            
-            result = self._make_request("POST", "users", user_data, use_service_key=True)
-            return result[0] if isinstance(result, list) else result
-            
+            result = self._make_request("POST", endpoint, data, use_service_key=False)
+            return result
+                    
         except Exception as e:
-            raise Exception(f"Failed to create user: {str(e)}")
+            raise Exception(f"Failed to create OAuth user: {str(e)}")
+    
+    async def create_user(self, email: str) -> Dict:
+        """Create a new user for OAuth (fallback method)"""
+        return await self.create_oauth_user(email)
     
     async def test_connection(self) -> Dict:
         """Test the HTTP connection to Supabase"""
