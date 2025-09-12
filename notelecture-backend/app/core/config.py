@@ -40,6 +40,10 @@ class Settings(BaseSettings):
     
     # Vercel settings
     VERCEL_TOKEN: Optional[str] = None
+    
+    # External service configuration
+    EXTERNAL_SERVICE_URL: str = ""
+    EXTERNAL_SERVICE_API_KEY: str = ""
 
     class Config:
         """

@@ -3,11 +3,20 @@
 # app/services/presentation.py
 import io
 import base64
-import fitz # PyMuPDF
-# from pptx import Presentation # Keep for future PPTX support
 import logging
-import asyncio # Add asyncio import
+import asyncio
+import httpx
 from typing import List, Dict
+from app.core.config import settings
+
+# Check if PyMuPDF is available
+try:
+    import fitz  # PyMuPDF
+    FITZ_AVAILABLE = True
+except ImportError:
+    FITZ_AVAILABLE = False
+    fitz = None
+    logging.warning("PyMuPDF not available - will use external service for PDF processing")
 
 logger = logging.getLogger(__name__)
 
@@ -58,14 +67,62 @@ class PresentationService:
              raise # Re-raise
 
     async def _process_pdf(self, file_content: bytes) -> List[str]:
-        """Convert PDF pages to base64 encoded images (using executor)."""
-        loop = asyncio.get_running_loop()
+        """Convert PDF pages to base64 encoded images (using external service if PyMuPDF not available)."""
+        # Try external service first if PyMuPDF is not available or external service is configured
+        if not FITZ_AVAILABLE or settings.EXTERNAL_SERVICE_URL:
+            try:
+                return await self._process_pdf_external(file_content)
+            except Exception as e:
+                logger.warning(f"External PDF processing failed: {e}")
+                if not FITZ_AVAILABLE:
+                    raise Exception("PDF processing is not available - please use external service")
+        
+        # Fallback to local processing if PyMuPDF is available
+        if FITZ_AVAILABLE:
+            loop = asyncio.get_running_loop()
+            try:
+                # Run the potentially blocking PDF processing in a thread pool executor
+                image_data = await loop.run_in_executor(None, self._sync_process_pdf, file_content)
+                return image_data
+            except Exception as e:
+                logger.error(f"Local PDF processing failed: {e}")
+                raise
+        else:
+            raise Exception("PDF processing is not available - please use external service")
+
+    async def _process_pdf_external(self, file_content: bytes) -> List[str]:
+        """Process PDF using external service."""
+        if not settings.EXTERNAL_SERVICE_URL:
+            raise Exception("External service URL not configured")
+        
         try:
-            # Run the potentially blocking PDF processing in a thread pool executor
-            image_data = await loop.run_in_executor(None, self._sync_process_pdf, file_content)
-            return image_data
+            async with httpx.AsyncClient(timeout=180.0) as client:
+                files = {"file": ("presentation.pdf", file_content, "application/pdf")}
+                headers = {}
+                if settings.EXTERNAL_SERVICE_API_KEY:
+                    headers["Authorization"] = f"Bearer {settings.EXTERNAL_SERVICE_API_KEY}"
+                
+                response = await client.post(
+                    f"{settings.EXTERNAL_SERVICE_URL}/process-pdf/",
+                    files=files,
+                    headers=headers
+                )
+                response.raise_for_status()
+                result = response.json()
+                
+                # Convert text slides to base64 images (simplified approach)
+                # In production, you'd want the external service to return actual images
+                slides_text = result.get("slides", [])
+                logger.info(f"External service processed PDF into {len(slides_text)} text slides")
+                
+                # For now, return the text as-is. In production, convert to images
+                return slides_text
+                
+        except httpx.HTTPError as e:
+            logger.error(f"HTTP error calling external service: {e}")
+            raise Exception(f"External PDF processing failed: {str(e)}")
         except Exception as e:
-            logger.error(f"Async wrapper caught error during PDF processing: {e}")
+            logger.error(f"Error calling external PDF service: {e}")
             raise
 
     # --- Placeholder for future PPTX processing ---

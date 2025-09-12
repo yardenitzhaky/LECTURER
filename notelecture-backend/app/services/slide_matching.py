@@ -1,12 +1,24 @@
 # app/services/slide_matching.py
-import cv2
-import numpy as np
 import base64
+import httpx
+import json
 from typing import List, Dict, Any, Tuple, Optional
 import logging
 import time
 import traceback
-import math 
+import math
+from app.core.config import settings
+
+# Check if OpenCV is available
+try:
+    import cv2
+    import numpy as np
+    CV2_AVAILABLE = True
+except ImportError:
+    CV2_AVAILABLE = False
+    cv2 = None
+    np = None
+    logging.warning("OpenCV not available - will use external service for slide matching")
 
 logger = logging.getLogger(__name__)
 
@@ -16,10 +28,14 @@ class SlideMatchingService:
         self.lowe_ratio = 0.75     
         self.change_confirm_threshold = 2   
 
-        self.detector = cv2.ORB_create(nfeatures=2000)
-        self.matcher = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=False)
-
-        logger.info("SlideMatchingService initialized (Simplified - Best Score, ORB Only)")
+        if CV2_AVAILABLE:
+            self.detector = cv2.ORB_create(nfeatures=2000)
+            self.matcher = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=False)
+            logger.info("SlideMatchingService initialized (Simplified - Best Score, ORB Only)")
+        else:
+            self.detector = None
+            self.matcher = None
+            logger.info("SlideMatchingService initialized (External Service Mode - OpenCV not available)")
 
     async def match_transcription_to_slides(
         self,
@@ -28,11 +44,105 @@ class SlideMatchingService:
         transcription_segments: List[Dict[str, Any]]
     ) -> List[Dict[str, Any]]:
         """
-        Matches transcription segments to slides by sampling video frames,
-        finding the slide with the highest ORB feature match score for each frame.
-        Defaults to the previously matched slide if no features match in a frame.
+        Matches transcription segments to slides using computer vision or external service.
         """
-        logger.info(f"Starting slide matching (Best Score): {len(slides)} slides, {len(transcription_segments)} segments.")
+        logger.info(f"Starting slide matching: {len(slides)} slides, {len(transcription_segments)} segments.")
+        
+        # Try external service first if OpenCV is not available or external service is configured
+        if not CV2_AVAILABLE or settings.EXTERNAL_SERVICE_URL:
+            try:
+                return await self._match_slides_external(video_path_or_url, slides, transcription_segments)
+            except Exception as e:
+                logger.warning(f"External slide matching failed: {e}")
+                if not CV2_AVAILABLE:
+                    logger.warning("OpenCV not available, falling back to simple time-based matching")
+                    return self._simple_time_based_matching(slides, transcription_segments)
+        
+        # Fallback to local processing if OpenCV is available
+        if CV2_AVAILABLE:
+            return await self._match_slides_local(video_path_or_url, slides, transcription_segments)
+        else:
+            logger.warning("No slide matching available, using simple time-based matching")
+            return self._simple_time_based_matching(slides, transcription_segments)
+
+    async def _match_slides_external(self, video_path_or_url: str, slides: List[Dict[str, Any]], transcription_segments: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Match slides using external service."""
+        if not settings.EXTERNAL_SERVICE_URL:
+            raise Exception("External service URL not configured")
+        
+        try:
+            async with httpx.AsyncClient(timeout=600.0) as client:
+                # Prepare video file
+                if video_path_or_url.startswith(('http://', 'https://')):
+                    # For URLs, we can't send the video file directly
+                    logger.warning("URL video detected for external service. Using simple time-based matching.")
+                    return self._simple_time_based_matching(slides, transcription_segments)
+                
+                # Read video file
+                with open(video_path_or_url, 'rb') as video_file:
+                    files = {"video_file": (video_path_or_url, video_file, "video/mp4")}
+                    data = {
+                        "slides_data": json.dumps(slides),
+                        "transcription_data": json.dumps(transcription_segments)
+                    }
+                    headers = {}
+                    if settings.EXTERNAL_SERVICE_API_KEY:
+                        headers["Authorization"] = f"Bearer {settings.EXTERNAL_SERVICE_API_KEY}"
+                    
+                    response = await client.post(
+                        f"{settings.EXTERNAL_SERVICE_URL}/match-slides/",
+                        files=files,
+                        data=data,
+                        headers=headers
+                    )
+                    response.raise_for_status()
+                    result = response.json()
+                    
+                    matches = result.get("matches", [])
+                    logger.info(f"External service returned {len(matches)} slide matches")
+                    
+                    # Apply matches to segments
+                    matched_segments = []
+                    for segment in transcription_segments:
+                        # Find the best match for this segment based on time
+                        best_slide = 0
+                        for match in matches:
+                            if (match["start_time"] <= segment["start_time"] <= match["end_time"]):
+                                best_slide = match["slide_index"]
+                                break
+                        
+                        matched_segments.append({**segment, 'slide_index': best_slide})
+                    
+                    return matched_segments
+                    
+        except httpx.HTTPError as e:
+            logger.error(f"HTTP error calling external slide matching service: {e}")
+            raise Exception(f"External slide matching failed: {str(e)}")
+        except Exception as e:
+            logger.error(f"Error calling external slide matching service: {e}")
+            raise
+
+    def _simple_time_based_matching(self, slides: List[Dict[str, Any]], transcription_segments: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Simple time-based slide matching as fallback."""
+        logger.info("Using simple time-based slide matching")
+        matched_segments = []
+        
+        if not slides or not transcription_segments:
+            return [{**segment, 'slide_index': 0} for segment in transcription_segments]
+        
+        # Calculate duration per slide
+        max_time = max(segment.get('end_time', 0) for segment in transcription_segments)
+        time_per_slide = max_time / len(slides) if len(slides) > 0 else max_time
+        
+        for segment in transcription_segments:
+            start_time = segment.get('start_time', 0)
+            slide_index = min(int(start_time / time_per_slide) if time_per_slide > 0 else 0, len(slides) - 1)
+            matched_segments.append({**segment, 'slide_index': slide_index})
+        
+        return matched_segments
+
+    async def _match_slides_local(self, video_path_or_url: str, slides: List[Dict[str, Any]], transcription_segments: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Local slide matching using OpenCV (original implementation)."""
         matched_segments = []
 
         try:
@@ -52,15 +162,15 @@ class SlideMatchingService:
                      logger.error(f"Error decoding slide index {slide.get('index', i)}: {decode_err}")
 
             if not slide_images_decoded:
-                logger.error("No valid slide images could be decoded. Assigning all segments to slide 0.")
-                return [{**segment, 'slide_index': 0} for segment in transcription_segments]
+                logger.error("No valid slide images could be decoded. Using simple time-based matching.")
+                return self._simple_time_based_matching(slides, transcription_segments)
 
             # 2. Precompute Slide Features (ORB only)
             logger.info("Precomputing ORB features for slides...")
             slide_features = self._precompute_slide_features_simple(slide_images_decoded)
             if not slide_features:
-                 logger.error("Failed to compute features for any slide. Assigning all segments to slide 0.")
-                 return [{**segment, 'slide_index': 0} for segment in transcription_segments]
+                 logger.error("Failed to compute features for any slide. Using simple time-based matching.")
+                 return self._simple_time_based_matching(slides, transcription_segments)
 
             # 3. Generate Timeline (Process Video or Estimate for URL)
             logger.info("Generating match timeline by processing video...")
@@ -88,9 +198,8 @@ class SlideMatchingService:
 
         except Exception as e:
             logger.critical(f"CRITICAL error in slide matching process: {e}", exc_info=True)
-            logger.critical(traceback.format_exc())
-            logger.critical("FALLBACK: Assigning all segments to slide 0 due to critical error.")
-            return [{**segment, 'slide_index': 0} for segment in transcription_segments]
+            logger.critical("FALLBACK: Using simple time-based matching.")
+            return self._simple_time_based_matching(slides, transcription_segments)
 
     def _preprocess_image(self, image: np.ndarray) -> np.ndarray:
         """Basic preprocessing for feature detection."""
