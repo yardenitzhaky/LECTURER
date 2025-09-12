@@ -13,9 +13,19 @@ security = HTTPBearer()
 async def get_current_user_http(credentials: HTTPAuthorizationCredentials = Depends(security)):
     """Get current user using HTTP approach to avoid database connection issues"""
     try:
-        # Decode JWT token
+        # Decode JWT token with relaxed validation to match fastapi-users
         token = credentials.credentials
-        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        
+        # Decode without audience validation since fastapi-users doesn't set it
+        payload = jwt.decode(
+            token, 
+            settings.SECRET_KEY, 
+            algorithms=[settings.ALGORITHM],
+            options={
+                "verify_aud": False,  # fastapi-users doesn't use audience
+                "verify_iss": False,  # fastapi-users doesn't use issuer
+            }
+        )
         user_id = payload.get("sub")
         
         if not user_id:
@@ -30,7 +40,7 @@ async def get_current_user_http(credentials: HTTPAuthorizationCredentials = Depe
         
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token expired")
-    except jwt.JWTError:
+    except (jwt.InvalidTokenError, jwt.DecodeError, AttributeError):
         raise HTTPException(status_code=401, detail="Invalid token")
     except Exception as e:
         logger.error(f"Error getting current user: {e}")
