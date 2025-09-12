@@ -9,11 +9,11 @@ python-multipart==0.0.6
 # Document Processing - ✅ IMPLEMENTED
 PyMuPDF==1.23.22
 
-# Video/Audio Processing - ⚠️ PARTIALLY IMPLEMENTED (graceful degradation)
+# Video/Audio Processing - ✅ IMPLEMENTED (graceful degradation on missing deps)
 moviepy==1.0.3
 yt-dlp==2023.11.16
 
-# Computer Vision - ⚠️ PARTIALLY IMPLEMENTED (graceful degradation)
+# Computer Vision - ✅ IMPLEMENTED (graceful degradation on missing deps)
 opencv-python-headless==4.9.0.80
 numpy==1.25.0
 
@@ -28,7 +28,14 @@ python-dotenv==1.0.0
 aiofiles==23.2.1
 httpx==0.25.2
 
+# ✅ SERVICES AVAILABLE:
+# - POST /process-pdf/ - Extract text from PDF slides
+# - POST /extract-audio/ - Extract audio from uploaded videos
+# - POST /download-extract-audio/ - Download video from URL and extract audio
+# - POST /match-slides/ - Match transcription segments to slides (basic time-based)
+# - GET /health - Dependency status check
+
 # NEXT STEPS:
-# 1. Add EXTERNAL_SERVICE_URL to Vercel environment variables
-# 2. Update backend services to call external API
-# 3. Test full integration
+# 1. ✅ Add EXTERNAL_SERVICE_URL to Vercel environment variables
+# 2. ✅ Update backend services to call external API
+# 3. ⚠️ Test full integration - CORS issues need fixing

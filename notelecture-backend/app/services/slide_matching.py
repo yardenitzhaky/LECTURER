@@ -201,7 +201,7 @@ class SlideMatchingService:
             logger.critical("FALLBACK: Using simple time-based matching.")
             return self._simple_time_based_matching(slides, transcription_segments)
 
-    def _preprocess_image(self, image: np.ndarray) -> np.ndarray:
+    def _preprocess_image(self, image) -> Any:
         """Basic preprocessing for feature detection."""
         if len(image.shape) > 2: gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         else: gray = image
@@ -332,7 +332,7 @@ class SlideMatchingService:
 
     def _find_best_match_score(
         self,
-        frame_preprocessed: np.ndarray,
+        frame_preprocessed: Any,
         slide_features: List[Dict[str, Any]],
         frame_idx: int # Added for logging context
     ) -> Tuple[Optional[int], int]:
