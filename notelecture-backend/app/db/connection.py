@@ -43,7 +43,8 @@ connect_args = {
         "tcp_keepalives_interval": "30", 
         "tcp_keepalives_count": "3"
     },
-    "command_timeout": 60  # Increased timeout for serverless cold starts
+    "command_timeout": 60,  # Increased timeout for serverless cold starts
+    "statement_cache_size": 0  # Disable prepared statements for transaction pooler
 }
 
 # Add SSL configuration for production
