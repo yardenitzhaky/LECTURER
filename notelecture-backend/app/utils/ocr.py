@@ -2,7 +2,14 @@ import base64
 import logging
 from io import BytesIO
 from PIL import Image
-import pytesseract
+
+try:
+    import pytesseract
+    PYTESSERACT_AVAILABLE = True
+except ImportError:
+    PYTESSERACT_AVAILABLE = False
+    pytesseract = None
+    logging.warning("pytesseract not available - OCR functionality disabled")
 
 logger = logging.getLogger(__name__)
 
@@ -16,6 +23,10 @@ def extract_text_from_base64_image(base64_image_data: str) -> str:
     Returns:
         Extracted text or empty string if OCR fails
     """
+    if not PYTESSERACT_AVAILABLE:
+        logger.warning("pytesseract not available - returning empty string")
+        return ""
+        
     try:
         # Remove data URL prefix if present (e.g., "data:image/png;base64,")
         if base64_image_data.startswith('data:'):

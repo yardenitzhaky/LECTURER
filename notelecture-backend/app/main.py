@@ -31,14 +31,21 @@ app = FastAPI(title=settings.PROJECT_NAME)
 logger.info(f"Configured logging. Starting {settings.PROJECT_NAME} application...") # Test log
 
 # --- Set up CORS ---
-# Temporary fix: Use wildcard for CORS to resolve immediate issue
-# TODO: Revert to settings.BACKEND_CORS_ORIGINS once deployment is stable
+# Allow specific origins including production domain
+allowed_origins = [
+    "http://localhost:5173",  # Local development
+    "http://localhost:3000",  # Alternative local dev
+    "https://lecturer.it.com", # Production frontend
+    "https://notelecture-frontend.vercel.app", # Vercel frontend
+    "https://notelecture-frontend-yardens-projects-1b88cd04.vercel.app", # Vercel preview
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
-    allow_methods=["*"], # Consider restricting methods (e.g., ["GET", "POST"])
-    allow_headers=["*"], # Consider restricting headers
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["*"],
 )
 
 # --- Include Authentication Routers ---
