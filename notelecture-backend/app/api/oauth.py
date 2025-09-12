@@ -130,43 +130,64 @@ async def google_callback(
             logger.error(f"Error type: {type(e)}")
             raise HTTPException(status_code=500, detail="Authentication error")
         
-        # Get or create user with database retry logic
+        # Try a direct database approach to bypass fastapi-users
         import asyncio
+        import uuid
+        from sqlalchemy import text
+        from app.db.connection import async_engine
         
-        async def get_or_create_user_with_retry(max_retries=3):
-            for attempt in range(max_retries):
-                try:
-                    # Try to get existing user
-                    user = await user_manager.get_by_email(user_email)
-                    logger.info(f"Found existing user: {user_email}")
-                    return user
-                except Exception as get_error:
-                    logger.info(f"User not found (attempt {attempt + 1}): {get_error}")
-                    
-                    # If user doesn't exist, try to create
-                    try:
-                        logger.info(f"Creating new user: {user_email}")
-                        from app.schemas import UserCreate
-                        user_create = UserCreate(
-                            email=user_email,
-                            password="oauth_user",  # OAuth users need some password
-                        )
-                        user = await user_manager.create(user_create)
-                        return user
-                    except Exception as create_error:
-                        logger.error(f"Database error (attempt {attempt + 1}): {create_error}")
-                        if attempt < max_retries - 1:
-                            await asyncio.sleep(1)  # Wait 1 second before retry
-                        else:
-                            raise create_error
+        logger.info("Attempting direct database connection for OAuth")
         
         try:
-            user = await get_or_create_user_with_retry()
+            # Test basic database connectivity first
+            async with async_engine.connect() as conn:
+                # Check if user exists with raw SQL
+                check_user_query = text("SELECT id, email, hashed_password FROM users WHERE email = :email")
+                result = await conn.execute(check_user_query, {"email": user_email})
+                existing_user = result.fetchone()
+                
+                if existing_user:
+                    logger.info(f"Found existing user with direct query: {user_email}")
+                    user_id = existing_user.id
+                else:
+                    # Create new user with raw SQL
+                    logger.info(f"Creating new user with direct query: {user_email}")
+                    new_user_id = uuid.uuid4()
+                    
+                    # Use a simple hash for OAuth users
+                    import hashlib
+                    simple_hash = hashlib.sha256(f"oauth_{user_email}".encode()).hexdigest()
+                    
+                    insert_user_query = text("""
+                        INSERT INTO users (id, email, hashed_password, is_active, is_verified, created_at) 
+                        VALUES (:id, :email, :hashed_password, true, true, now())
+                    """)
+                    
+                    await conn.execute(insert_user_query, {
+                        "id": new_user_id,
+                        "email": user_email,
+                        "hashed_password": simple_hash
+                    })
+                    await conn.commit()
+                    
+                    user_id = new_user_id
+                    logger.info(f"Created new user successfully: {user_email}")
+                
+                # Create a minimal user object for JWT token generation
+                class SimpleUser:
+                    def __init__(self, user_id, email):
+                        self.id = user_id
+                        self.email = email
+                        self.is_active = True
+                        self.is_verified = True
+                
+                user = SimpleUser(user_id, user_email)
+                
         except Exception as db_error:
-            logger.error(f"Database connection failed after retries: {db_error}")
-            # Return a more specific error to help debug
+            logger.error(f"Direct database connection failed: {db_error}")
+            logger.error(f"Error type: {type(db_error)}")
             return RedirectResponse(
-                url=f"{settings.FRONTEND_URL}/oauth/callback?error=Database connection error",
+                url=f"{settings.FRONTEND_URL}/oauth/callback?error=Database connection error - {str(db_error)[:100]}",
                 status_code=302
             )
         

@@ -2,7 +2,7 @@
 import logging
 from fastapi import APIRouter
 
-from app.api import transcription, lectures, summarization, subscriptions
+from app.api import transcription, lectures, summarization, subscriptions, health
 
 logger = logging.getLogger(__name__)
 
@@ -10,6 +10,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 # Include all sub-routers
+router.include_router(health.router, prefix="/health", tags=["health"])
 router.include_router(transcription.router, tags=["transcription"])
 router.include_router(lectures.router, tags=["lectures"])
 router.include_router(summarization.router, tags=["summarization"])
