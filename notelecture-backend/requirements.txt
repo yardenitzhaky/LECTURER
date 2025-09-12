@@ -1,4 +1,5 @@
 # notelecture-backend/requirements.txt
+# ✅ CLEANED FOR VERCEL DEPLOYMENT - Heavy dependencies moved to external service
 
 # Core FastAPI dependencies
 fastapi==0.109.0
@@ -11,24 +12,24 @@ psycopg2-binary==2.9.9  # PostgreSQL adapter
 asyncpg==0.29.0         # Async PostgreSQL adapter
 cryptography>=42.0.0    
 
-# AI and Processing (Core)
+# AI and Processing (Core only - heavy deps moved to external service)
 langchain==0.2.11
 langchain-openai==0.1.19
-moviepy==1.0.3          
-numpy==1.25.0            
-Pillow==10.4.0           
-opencv-python==4.9.0.80  
-yt-dlp==2023.11.16       
+# REMOVED: moviepy==1.0.3 (now in external service)
+# REMOVED: numpy==1.25.0 (now in external service) 
+# REMOVED: opencv-python==4.9.0.80 (now in external service)
+# REMOVED: yt-dlp==2023.11.16 (now in external service)
+# REMOVED: PyMuPDF==1.23.22 (now in external service)
+# REMOVED: pytesseract==0.3.10 (now in external service)
 
 # External API Communication
 requests==2.31.0
 httpx==0.27.0                     
 
-# File Handling
+# File Handling (Light only)
 aiofiles==23.2.1         
-PyMuPDF==1.23.22         
+Pillow==10.4.0           
 python-pptx==0.6.21
-pytesseract==0.3.10      # OCR for slide text extraction     
 
 # Utilities
 python-dotenv==1.0.0     
