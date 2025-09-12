@@ -27,13 +27,19 @@ async def get_current_user_http(credentials: HTTPAuthorizationCredentials = Depe
             }
         )
         user_id = payload.get("sub")
+        logger.info(f"JWT payload: {payload}")
+        logger.info(f"Extracted user_id: {user_id}")
         
         if not user_id:
             raise HTTPException(status_code=401, detail="Invalid token")
         
-        # Get user via HTTP
+        # Get user via HTTP with better error handling
+        logger.info(f"Looking up user with ID: {user_id}")
         user = await supabase_http.get_user_by_id(user_id)
+        logger.info(f"User lookup result: {user}")
+        
         if not user:
+            logger.error(f"User not found in database for ID: {user_id}")
             raise HTTPException(status_code=404, detail="User not found")
             
         return user
