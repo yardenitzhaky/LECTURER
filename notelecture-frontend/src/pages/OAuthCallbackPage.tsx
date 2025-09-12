@@ -13,20 +13,25 @@ export const OAuthCallbackPage = () => {
         const token = urlParams.get('token');
         const error = urlParams.get('error');
 
+        console.log('OAuth callback - token:', token ? 'received' : 'missing');
+        console.log('OAuth callback - error:', error);
+        console.log('OAuth callback - full URL:', window.location.href);
+
         if (error) {
-          throw new Error(error);
+          throw new Error(decodeURIComponent(error));
         }
 
         if (token) {
           localStorage.setItem('token', token);
+          console.log('Token saved, redirecting to home');
           // Redirect to home page, AuthProvider will handle the rest
           window.location.href = '/';
         } else {
-          throw new Error('No token received');
+          throw new Error('No token received from OAuth callback');
         }
       } catch (err) {
         console.error('OAuth callback error:', err);
-        setError('Authentication failed. Please try again.');
+        setError(err instanceof Error ? err.message : 'Authentication failed. Please try again.');
         setLoading(false);
       }
     };
