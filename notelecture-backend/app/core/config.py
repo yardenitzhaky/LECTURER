@@ -32,6 +32,7 @@ class Settings(BaseSettings):
     supabase_access_token: Optional[str] = None
     supabase_url: Optional[str] = None
     supabase_anon_key: Optional[str] = None
+    supabase_service_key: Optional[str] = None
     
     # PayPal settings
     PAYPAL_CLIENT_ID: Optional[str] = None

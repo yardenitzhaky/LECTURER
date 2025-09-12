@@ -130,64 +130,41 @@ async def google_callback(
             logger.error(f"Error type: {type(e)}")
             raise HTTPException(status_code=500, detail="Authentication error")
         
-        # Try a direct database approach to bypass fastapi-users
-        import asyncio
-        import uuid
-        from sqlalchemy import text
-        from app.db.connection import async_engine
+        # Use HTTP-based approach to bypass Vercel networking issues
+        from app.db.http_client import supabase_http
         
-        logger.info("Attempting direct database connection for OAuth")
+        logger.info("Using HTTP-based database access for OAuth")
         
         try:
-            # Test basic database connectivity first
-            async with async_engine.connect() as conn:
-                # Check if user exists with raw SQL
-                check_user_query = text("SELECT id, email, hashed_password FROM users WHERE email = :email")
-                result = await conn.execute(check_user_query, {"email": user_email})
-                existing_user = result.fetchone()
+            # Check if user exists via HTTP
+            existing_user = await supabase_http.get_user_by_email(user_email)
+            
+            if existing_user:
+                logger.info(f"Found existing user via HTTP: {user_email}")
+                user_id = existing_user["id"]
+            else:
+                # Create new user via HTTP
+                logger.info(f"Creating new user via HTTP: {user_email}")
+                new_user = await supabase_http.create_user(user_email)
+                user_id = new_user["id"]
+                logger.info(f"Created new user successfully via HTTP: {user_email}")
+            
+            # Create a minimal user object for JWT token generation
+            class SimpleUser:
+                def __init__(self, user_id, email):
+                    self.id = user_id
+                    self.email = email
+                    self.is_active = True
+                    self.is_verified = True
+            
+            user = SimpleUser(user_id, user_email)
+            logger.info(f"Successfully prepared user object for JWT: {user_email}")
                 
-                if existing_user:
-                    logger.info(f"Found existing user with direct query: {user_email}")
-                    user_id = existing_user.id
-                else:
-                    # Create new user with raw SQL
-                    logger.info(f"Creating new user with direct query: {user_email}")
-                    new_user_id = uuid.uuid4()
-                    
-                    # Use a simple hash for OAuth users
-                    import hashlib
-                    simple_hash = hashlib.sha256(f"oauth_{user_email}".encode()).hexdigest()
-                    
-                    insert_user_query = text("""
-                        INSERT INTO users (id, email, hashed_password, is_active, is_verified, created_at) 
-                        VALUES (:id, :email, :hashed_password, true, true, now())
-                    """)
-                    
-                    await conn.execute(insert_user_query, {
-                        "id": new_user_id,
-                        "email": user_email,
-                        "hashed_password": simple_hash
-                    })
-                    await conn.commit()
-                    
-                    user_id = new_user_id
-                    logger.info(f"Created new user successfully: {user_email}")
-                
-                # Create a minimal user object for JWT token generation
-                class SimpleUser:
-                    def __init__(self, user_id, email):
-                        self.id = user_id
-                        self.email = email
-                        self.is_active = True
-                        self.is_verified = True
-                
-                user = SimpleUser(user_id, user_email)
-                
-        except Exception as db_error:
-            logger.error(f"Direct database connection failed: {db_error}")
-            logger.error(f"Error type: {type(db_error)}")
+        except Exception as http_error:
+            logger.error(f"HTTP database access failed: {http_error}")
+            logger.error(f"Error type: {type(http_error)}")
             return RedirectResponse(
-                url=f"{settings.FRONTEND_URL}/oauth/callback?error=Database connection error - {str(db_error)[:100]}",
+                url=f"{settings.FRONTEND_URL}/oauth/callback?error=HTTP database error - {str(http_error)[:100]}",
                 status_code=302
             )
         
