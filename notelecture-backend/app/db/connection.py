@@ -22,7 +22,27 @@ elif settings.DATABASE_URL.startswith("mysql+pymysql://"):
 else:
     async_database_url = settings.DATABASE_URL
 
-async_engine = create_async_engine(async_database_url)
+# Configure asyncpg for serverless environments like Vercel
+connect_args = {
+    "server_settings": {
+        "application_name": "notelecture_vercel",
+        "jit": "off"  # Disable JIT for better compatibility
+    },
+    "command_timeout": 30,
+    "ssl": "require" if "sslmode" not in async_database_url else None
+}
+
+# Add connection pooling configuration optimized for serverless
+async_engine = create_async_engine(
+    async_database_url,
+    connect_args=connect_args,
+    pool_size=1,  # Minimal pool for serverless
+    max_overflow=0,  # No overflow in serverless
+    pool_pre_ping=True,  # Validate connections
+    pool_recycle=300,  # Recycle connections every 5 minutes
+    echo=False
+)
+
 AsyncSessionLocal = sessionmaker(async_engine, class_=AsyncSession, expire_on_commit=False)
 
 

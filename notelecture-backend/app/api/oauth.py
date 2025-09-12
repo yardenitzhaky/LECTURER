@@ -130,19 +130,45 @@ async def google_callback(
             logger.error(f"Error type: {type(e)}")
             raise HTTPException(status_code=500, detail="Authentication error")
         
-        # Get or create user
+        # Get or create user with database retry logic
+        import asyncio
+        
+        async def get_or_create_user_with_retry(max_retries=3):
+            for attempt in range(max_retries):
+                try:
+                    # Try to get existing user
+                    user = await user_manager.get_by_email(user_email)
+                    logger.info(f"Found existing user: {user_email}")
+                    return user
+                except Exception as get_error:
+                    logger.info(f"User not found (attempt {attempt + 1}): {get_error}")
+                    
+                    # If user doesn't exist, try to create
+                    try:
+                        logger.info(f"Creating new user: {user_email}")
+                        from app.schemas import UserCreate
+                        user_create = UserCreate(
+                            email=user_email,
+                            password="oauth_user",  # OAuth users need some password
+                        )
+                        user = await user_manager.create(user_create)
+                        return user
+                    except Exception as create_error:
+                        logger.error(f"Database error (attempt {attempt + 1}): {create_error}")
+                        if attempt < max_retries - 1:
+                            await asyncio.sleep(1)  # Wait 1 second before retry
+                        else:
+                            raise create_error
+        
         try:
-            user = await user_manager.get_by_email(user_email)
-            logger.info(f"Found existing user: {user_email}")
-        except:
-            # Create new user if doesn't exist
-            logger.info(f"Creating new user: {user_email}")
-            from app.schemas import UserCreate
-            user_create = UserCreate(
-                email=user_email,
-                password="oauth_user",  # OAuth users need some password
+            user = await get_or_create_user_with_retry()
+        except Exception as db_error:
+            logger.error(f"Database connection failed after retries: {db_error}")
+            # Return a more specific error to help debug
+            return RedirectResponse(
+                url=f"{settings.FRONTEND_URL}/oauth/callback?error=Database connection error",
+                status_code=302
             )
-            user = await user_manager.create(user_create)
         
         # Generate JWT token
         jwt_token = await auth_backend.get_strategy().write_token(user)
