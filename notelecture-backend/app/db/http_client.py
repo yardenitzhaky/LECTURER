@@ -61,6 +61,16 @@ class SupabaseHTTPClient:
             print(f"Error getting user by email: {e}")
             return None
     
+    async def get_user_by_id(self, user_id: str) -> Optional[Dict]:
+        """Get user by ID"""
+        try:
+            endpoint = f"users?id=eq.{user_id}&select=*"
+            result = self._make_request("GET", endpoint)
+            return result[0] if result else None
+        except Exception as e:
+            print(f"Error getting user by ID: {e}")
+            return None
+    
     async def create_oauth_user(self, email: str) -> Dict:
         """Create or get OAuth user using database function"""
         try:

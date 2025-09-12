@@ -65,11 +65,12 @@ app.include_router(
     prefix="/api/auth",
     tags=["auth"],
 )
-app.include_router(
-    fastapi_users.get_users_router(UserRead, UserUpdate),
-    prefix="/api/users",
-    tags=["users"],
-)
+# Commented out to use custom HTTP-based users router instead
+# app.include_router(
+#     fastapi_users.get_users_router(UserRead, UserUpdate),
+#     prefix="/api/users",
+#     tags=["users"],
+# )
 app.include_router(
     oauth.router,
     prefix="/api/auth/google",
