@@ -138,10 +138,8 @@ class TranscriptionService:
     def _sync_download_and_extract(self, video_url: str):
         """Synchronous part of downloading and extracting audio."""
         try:
-            # Use settings.UPLOADS_DIR consistently
-            from app.core.config import settings # Import settings here if needed by sync function
-            upload_dir = settings.UPLOADS_DIR
-            os.makedirs(upload_dir, exist_ok=True)
+            # Use /tmp directory for Vercel serverless environment
+            upload_dir = "/tmp"
             filename = str(uuid4())
             # yt-dlp determines final filename, provide a path template
             temp_path_template = os.path.join(upload_dir, f"{filename}.%(ext)s")
@@ -265,8 +263,7 @@ class TranscriptionService:
                 
                 if result.get("status") == "success":
                     # Generate a temporary file path for the audio
-                    upload_dir = settings.UPLOADS_DIR
-                    os.makedirs(upload_dir, exist_ok=True)
+                    upload_dir = "/tmp"
                     filename = str(uuid4())
                     output_path = os.path.join(upload_dir, f"{filename}.mp3")
                     

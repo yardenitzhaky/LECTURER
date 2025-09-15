@@ -1,6 +1,8 @@
 # app/api/transcription.py
 import uuid
 import logging
+import tempfile
+import os
 from pathlib import Path
 from typing import Dict, Any, Optional
 
@@ -41,8 +43,8 @@ async def transcribe_lecture(
     if video and video_url:
         raise HTTPException(status_code=400, detail="Provide either video file or video URL, not both.")
 
-    upload_dir = Path(settings.UPLOADS_DIR)
-    upload_dir.mkdir(parents=True, exist_ok=True)
+    # Use /tmp directory for Vercel serverless environment
+    upload_dir = Path("/tmp")
     lecture_id = None
 
     try:
@@ -103,12 +105,13 @@ async def transcribe_lecture(
         original_video_filename = "video_from_url"
         if video:
             original_video_filename = video.filename or "uploaded_video"
-            video_filename = f"{uuid.uuid4()}{Path(original_video_filename).suffix}"
-            video_path_obj = upload_dir / video_filename
-            async with aiofiles.open(video_path_obj, 'wb') as out_file:
-                await out_file.write(await video.read())
-            video_path_str = str(video_path_obj)
-            logger.info(f"Saved uploaded video to: {video_path_str}")
+            # Use tempfile for better temp file handling
+            suffix = Path(original_video_filename).suffix
+            with tempfile.NamedTemporaryFile(delete=False, suffix=suffix, dir='/tmp') as tmp_file:
+                video_content = await video.read()
+                tmp_file.write(video_content)
+                video_path_str = tmp_file.name
+            logger.info(f"Saved uploaded video to temp file: {video_path_str}")
         else:
             video_path_str = video_url
             logger.info(f"Using video URL: {video_path_str[:100]}...")
