@@ -52,17 +52,21 @@ if "supabase.co" in async_database_url or os.getenv("VERCEL"):
     connect_args["ssl"] = "require"
 
 # Add connection pooling configuration optimized for serverless
+from sqlalchemy.pool import NullPool
 async_engine = create_async_engine(
     async_database_url,
     connect_args=connect_args,
-    pool_size=0,  # No persistent pool in serverless
-    max_overflow=0,  # No overflow in serverless  
-    poolclass=None,  # Disable connection pooling entirely
-    pool_pre_ping=False,  # Skip pre-ping since no pool
+    poolclass=NullPool,  # Use NullPool for serverless environments
     echo=False
 )
 
-AsyncSessionLocal = sessionmaker(async_engine, class_=AsyncSession, expire_on_commit=False)
+AsyncSessionLocal = sessionmaker(
+    async_engine, 
+    class_=AsyncSession, 
+    expire_on_commit=False,
+    autoflush=False,  # Prevent automatic flushes
+    autocommit=False  # Ensure explicit commits
+)
 
 
 def get_session():
@@ -75,6 +79,13 @@ def get_session():
 
 
 async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
-    """Get async database session."""
+    """Get async database session with proper isolation for serverless."""
     async with AsyncSessionLocal() as session:
-        yield session
+        try:
+            yield session
+            await session.commit()  # Commit any pending changes
+        except Exception:
+            await session.rollback()  # Rollback on error
+            raise
+        finally:
+            await session.close()  # Ensure session is properly closed

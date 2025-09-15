@@ -30,6 +30,28 @@ logger = logging.getLogger(__name__)
 app = FastAPI(title=settings.PROJECT_NAME)
 logger.info(f"Configured logging. Starting {settings.PROJECT_NAME} application...") # Test log
 
+# --- Add middleware to handle database errors ---
+from fastapi import Request, Response
+from fastapi.responses import JSONResponse
+from sqlalchemy.exc import InterfaceError, OperationalError
+
+@app.middleware("http")
+async def handle_db_errors(request: Request, call_next):
+    """Handle database connection errors gracefully."""
+    try:
+        response = await call_next(request)
+        return response
+    except (InterfaceError, OperationalError) as e:
+        logger.error(f"Database connection error: {str(e)}")
+        return JSONResponse(
+            status_code=503,
+            content={"detail": "Database connection error. Please try again."},
+            headers={
+                "Access-Control-Allow-Origin": request.headers.get("origin", "*"),
+                "Access-Control-Allow-Credentials": "true",
+            }
+        )
+
 # --- Set up CORS ---
 # Allow specific origins including production domain
 allowed_origins = [
@@ -40,12 +62,16 @@ allowed_origins = [
     "https://notelecture-frontend-yardens-projects-1b88cd04.vercel.app", # Vercel preview
 ]
 
+# Log the configured origins for debugging
+logger.info(f"CORS allowed origins: {allowed_origins}")
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["*"],
+    allow_methods=["*"],  # Allow all methods
+    allow_headers=["*"],  # Allow all headers
+    expose_headers=["*"],  # Expose all headers to the client
 )
 
 # --- Include Authentication Routers ---
