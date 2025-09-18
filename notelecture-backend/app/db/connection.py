@@ -39,12 +39,14 @@ connect_args = {
     "server_settings": {
         "application_name": "notelecture_vercel",
         "jit": "off",  # Disable JIT for better compatibility
-        "tcp_keepalives_idle": "300",
-        "tcp_keepalives_interval": "30", 
+        "tcp_keepalives_idle": "600",  # Increased keepalive settings
+        "tcp_keepalives_interval": "60",
         "tcp_keepalives_count": "3"
     },
-    "command_timeout": 60,  # Increased timeout for serverless cold starts
-    "statement_cache_size": 0  # Disable prepared statements for transaction pooler
+    "command_timeout": 120,  # Increased timeout for serverless environments
+    "statement_cache_size": 0,  # Disable prepared statements for transaction pooler
+    "pool_timeout": 30,  # Add pool timeout
+    "pool_recycle": 300  # Recycle connections every 5 minutes
 }
 
 # Add SSL configuration for production
@@ -80,12 +82,22 @@ def get_session():
 
 async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
     """Get async database session with proper isolation for serverless."""
-    async with AsyncSessionLocal() as session:
-        try:
-            yield session
+    session = None
+    try:
+        session = AsyncSessionLocal()
+        yield session
+        if session.in_transaction():
             await session.commit()  # Commit any pending changes
-        except Exception:
-            await session.rollback()  # Rollback on error
-            raise
-        finally:
-            await session.close()  # Ensure session is properly closed
+    except Exception as e:
+        if session and session.in_transaction():
+            try:
+                await session.rollback()  # Rollback on error
+            except Exception as rollback_error:
+                print(f"Error during rollback: {rollback_error}")
+        raise e
+    finally:
+        if session:
+            try:
+                await session.close()  # Ensure session is properly closed
+            except Exception as close_error:
+                print(f"Error closing session: {close_error}")  # Log but don't raise

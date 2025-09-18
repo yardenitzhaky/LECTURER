@@ -94,14 +94,15 @@ class PresentationService:
         """Process PDF using external service."""
         if not settings.EXTERNAL_SERVICE_URL:
             raise Exception("External service URL not configured")
-        
+
         try:
             async with httpx.AsyncClient(timeout=180.0) as client:
                 files = {"file": ("presentation.pdf", file_content, "application/pdf")}
                 headers = {}
                 if settings.EXTERNAL_SERVICE_API_KEY:
                     headers["Authorization"] = f"Bearer {settings.EXTERNAL_SERVICE_API_KEY}"
-                
+
+                logger.info(f"Calling external service: {settings.EXTERNAL_SERVICE_URL}/process-pdf/")
                 response = await client.post(
                     f"{settings.EXTERNAL_SERVICE_URL}/process-pdf/",
                     files=files,
@@ -109,21 +110,22 @@ class PresentationService:
                 )
                 response.raise_for_status()
                 result = response.json()
-                
-                # Convert text slides to base64 images (simplified approach)
-                # In production, you'd want the external service to return actual images
-                slides_text = result.get("slides", [])
-                logger.info(f"External service processed PDF into {len(slides_text)} text slides")
-                
-                # For now, return the text as-is. In production, convert to images
-                return slides_text
-                
+
+                # The external service should return base64 image slides
+                slides_images = result.get("slides", [])
+                logger.info(f"External service processed PDF into {len(slides_images)} image slides")
+
+                return slides_images
+
         except httpx.HTTPError as e:
             logger.error(f"HTTP error calling external service: {e}")
-            raise Exception(f"External PDF processing failed: {str(e)}")
+            if hasattr(e, 'response') and e.response:
+                logger.error(f"Response status: {e.response.status_code}")
+                logger.error(f"Response text: {e.response.text}")
+            raise Exception(f"External PDF processing failed: HTTP {e.response.status_code if hasattr(e, 'response') and e.response else 'Unknown'}")
         except Exception as e:
             logger.error(f"Error calling external PDF service: {e}")
-            raise
+            raise Exception(f"External PDF processing failed: {str(e)}")
 
     # --- Placeholder for future PPTX processing ---
     # async def _process_powerpoint(self, file_content: bytes) -> List[str]:
