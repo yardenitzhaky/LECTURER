@@ -53,8 +53,8 @@ async def handle_db_errors(request: Request, call_next):
         )
 
 # --- Set up CORS ---
-# Allow specific origins including production domain
-allowed_origins = [
+# Use origins from environment variable, with fallback to hardcoded list
+allowed_origins = settings.BACKEND_CORS_ORIGINS if settings.BACKEND_CORS_ORIGINS else [
     "http://localhost:5173",  # Local development
     "http://localhost:3000",  # Alternative local dev
     "https://lecturer.it.com", # Production frontend
