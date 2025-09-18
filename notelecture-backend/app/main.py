@@ -55,7 +55,7 @@ async def handle_db_errors(request: Request, call_next):
 # --- Set up CORS ---
 # Use origins from environment variable, with fallback to hardcoded list
 # Environment variable should be a JSON string like: ["http://localhost:5173", "https://lecturer.it.com"]
-allowed_origins = settings.BACKEND_CORS_ORIGINS if settings.BACKEND_CORS_ORIGINS else [
+default_origins = [
     "http://localhost:5173",  # Local development
     "http://localhost:3000",  # Alternative local dev
     "https://lecturer.it.com", # Production frontend
@@ -63,12 +63,24 @@ allowed_origins = settings.BACKEND_CORS_ORIGINS if settings.BACKEND_CORS_ORIGINS
     "https://notelecture-frontend-yardens-projects-1b88cd04.vercel.app", # Vercel preview
 ]
 
+# Use configured origins or fallback to defaults
+allowed_origins = settings.BACKEND_CORS_ORIGINS if settings.BACKEND_CORS_ORIGINS else default_origins
+
+# Ensure allowed_origins is a list (in case it somehow becomes a string)
+if isinstance(allowed_origins, str):
+    try:
+        import json
+        allowed_origins = json.loads(allowed_origins)
+    except json.JSONDecodeError:
+        allowed_origins = [allowed_origins]
+
 # Always ensure lecturer.it.com is included for production
 if "https://lecturer.it.com" not in allowed_origins:
     allowed_origins.append("https://lecturer.it.com")
 
 # Log the configured origins for debugging
 logger.info(f"CORS allowed origins: {allowed_origins}")
+logger.info(f"Raw BACKEND_CORS_ORIGINS from settings: {repr(settings.BACKEND_CORS_ORIGINS)}")
 
 app.add_middleware(
     CORSMiddleware,

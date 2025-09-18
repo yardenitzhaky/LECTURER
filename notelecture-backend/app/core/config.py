@@ -1,8 +1,10 @@
 # app/core/config.py
 
+import json
 from typing import List
 from pydantic_settings import BaseSettings
 from typing import Any, Dict, Optional
+from pydantic import field_validator
 
 class Settings(BaseSettings):
     """
@@ -10,8 +12,8 @@ class Settings(BaseSettings):
     BaseSettings automatically reads environment variables into these fields.
     """
     # Core application settings
-    PROJECT_NAME: str  
-    BACKEND_CORS_ORIGINS: List[str]  
+    PROJECT_NAME: str
+    BACKEND_CORS_ORIGINS: Optional[List[str]] = None
     DATABASE_URL: str
     UPLOADS_DIR: str
     
@@ -45,6 +47,20 @@ class Settings(BaseSettings):
     # External service configuration
     EXTERNAL_SERVICE_URL: str = ""
     EXTERNAL_SERVICE_API_KEY: str = ""
+
+    @field_validator('BACKEND_CORS_ORIGINS', mode='before')
+    @classmethod
+    def parse_cors_origins(cls, v):
+        """Parse CORS origins from JSON string if needed."""
+        if v is None:
+            return None
+        if isinstance(v, str):
+            try:
+                return json.loads(v)
+            except json.JSONDecodeError:
+                # If it's a single origin string, return as list
+                return [v]
+        return v
 
     class Config:
         """
