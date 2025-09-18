@@ -54,6 +54,7 @@ async def handle_db_errors(request: Request, call_next):
 
 # --- Set up CORS ---
 # Use origins from environment variable, with fallback to hardcoded list
+# Environment variable should be a JSON string like: ["http://localhost:5173", "https://lecturer.it.com"]
 allowed_origins = settings.BACKEND_CORS_ORIGINS if settings.BACKEND_CORS_ORIGINS else [
     "http://localhost:5173",  # Local development
     "http://localhost:3000",  # Alternative local dev
@@ -61,6 +62,10 @@ allowed_origins = settings.BACKEND_CORS_ORIGINS if settings.BACKEND_CORS_ORIGINS
     "https://notelecture-frontend.vercel.app", # Vercel frontend
     "https://notelecture-frontend-yardens-projects-1b88cd04.vercel.app", # Vercel preview
 ]
+
+# Always ensure lecturer.it.com is included for production
+if "https://lecturer.it.com" not in allowed_origins:
+    allowed_origins.append("https://lecturer.it.com")
 
 # Log the configured origins for debugging
 logger.info(f"CORS allowed origins: {allowed_origins}")
