@@ -45,7 +45,6 @@ connect_args = {
         "jit": "off",  # Disable JIT for better compatibility
     },
     "command_timeout": 10,  # Shorter timeout for NullPool connections
-    "server_closing_timeout": 5,  # Timeout for connection closing
     "statement_cache_size": 0,  # Disable prepared statements for transaction pooler
 }
 
