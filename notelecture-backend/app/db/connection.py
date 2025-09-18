@@ -12,7 +12,7 @@ from app.core.config import settings
 engine = create_engine(
     settings.DATABASE_URL,
     # Disable prepared statements for pgbouncer compatibility
-    execution_options={"compiled_cache": {}}
+    execution_options={"compiled_cache": None}
 )
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
@@ -62,7 +62,10 @@ async_engine = create_async_engine(
     pool_pre_ping=True,  # Verify connections before use
     echo=False,
     # Disable prepared statements completely for pgbouncer compatibility
-    execution_options={"compiled_cache": {}, "prepare_statement": False}
+    execution_options={
+        "compiled_cache": None,  # Completely disable compiled cache
+        "prepare_statement": False  # Disable prepared statements
+    }
 )
 
 AsyncSessionLocal = sessionmaker(
