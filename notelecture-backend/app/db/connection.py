@@ -39,14 +39,9 @@ connect_args = {
     "server_settings": {
         "application_name": "notelecture_vercel",
         "jit": "off",  # Disable JIT for better compatibility
-        "tcp_keepalives_idle": "600",  # Increased keepalive settings
-        "tcp_keepalives_interval": "60",
-        "tcp_keepalives_count": "3"
     },
-    "command_timeout": 120,  # Increased timeout for serverless environments
+    "command_timeout": 60,  # Timeout for serverless environments
     "statement_cache_size": 0,  # Disable prepared statements for transaction pooler
-    "pool_timeout": 30,  # Add pool timeout
-    "pool_recycle": 300  # Recycle connections every 5 minutes
 }
 
 # Add SSL configuration for production
@@ -59,6 +54,7 @@ async_engine = create_async_engine(
     async_database_url,
     connect_args=connect_args,
     poolclass=NullPool,  # Use NullPool for serverless environments
+    pool_recycle=300,  # Recycle connections every 5 minutes
     echo=False
 )
 
