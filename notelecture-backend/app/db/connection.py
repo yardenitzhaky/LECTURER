@@ -44,7 +44,8 @@ connect_args = {
         "application_name": "notelecture_vercel",
         "jit": "off",  # Disable JIT for better compatibility
     },
-    "command_timeout": 60,  # Timeout for serverless environments
+    "command_timeout": 10,  # Shorter timeout for NullPool connections
+    "server_closing_timeout": 5,  # Timeout for connection closing
     "statement_cache_size": 0,  # Disable prepared statements for transaction pooler
 }
 
@@ -59,6 +60,7 @@ async_engine = create_async_engine(
     connect_args=connect_args,
     poolclass=NullPool,  # Use NullPool for serverless environments
     pool_recycle=300,  # Recycle connections every 5 minutes
+    pool_pre_ping=True,  # Verify connections before use
     echo=False,
     # Disable prepared statements completely for pgbouncer compatibility
     execution_options={"compiled_cache": {}, "prepare_statement": False}
@@ -100,6 +102,10 @@ async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
     finally:
         if session:
             try:
-                await session.close()  # Ensure session is properly closed
+                # Close session with timeout handling
+                import asyncio
+                await asyncio.wait_for(session.close(), timeout=5.0)
+            except asyncio.TimeoutError:
+                print("Session close timed out - connection may have been dropped")
             except Exception as close_error:
                 print(f"Error closing session: {close_error}")  # Log but don't raise
