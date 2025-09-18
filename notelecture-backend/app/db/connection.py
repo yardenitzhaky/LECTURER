@@ -45,7 +45,9 @@ connect_args = {
         "jit": "off",  # Disable JIT for better compatibility
     },
     "command_timeout": 10,  # Shorter timeout for NullPool connections
-    "statement_cache_size": 0,  # Disable prepared statements for transaction pooler
+    "statement_cache_size": 0,  # CRITICAL: Disable prepared statements completely
+    "prepared_statement_cache_size": 0,  # Disable prepared statement cache
+    "prepared_statement_name_func": None,  # Disable prepared statement naming
 }
 
 # Add SSL configuration for production
@@ -61,16 +63,16 @@ async_engine = create_async_engine(
     pool_recycle=300,  # Recycle connections every 5 minutes
     pool_pre_ping=True,  # Verify connections before use
     echo=False,
-    # Disable prepared statements completely for pgbouncer compatibility
+    # NUCLEAR OPTION: Force all statements to execute as plain text
     execution_options={
-        "compiled_cache": None,  # Completely disable compiled cache
-        "prepare_statement": False  # Disable prepared statements
+        "compiled_cache": None,  # Disable compiled cache
+        "render_postcompile": True,  # Force inline parameter rendering
     }
 )
 
 AsyncSessionLocal = sessionmaker(
-    async_engine, 
-    class_=AsyncSession, 
+    async_engine,
+    class_=AsyncSession,
     expire_on_commit=False,
     autoflush=False,  # Prevent automatic flushes
     autocommit=False  # Ensure explicit commits
