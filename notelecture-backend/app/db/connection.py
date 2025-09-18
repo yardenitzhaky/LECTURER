@@ -9,7 +9,11 @@ from sqlalchemy.orm import sessionmaker
 from app.core.config import settings
 
 # Sync database setup
-engine = create_engine(settings.DATABASE_URL)
+engine = create_engine(
+    settings.DATABASE_URL,
+    # Disable prepared statements for pgbouncer compatibility
+    execution_options={"compiled_cache": {}}
+)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 # Async database setup
@@ -55,7 +59,9 @@ async_engine = create_async_engine(
     connect_args=connect_args,
     poolclass=NullPool,  # Use NullPool for serverless environments
     pool_recycle=300,  # Recycle connections every 5 minutes
-    echo=False
+    echo=False,
+    # Disable prepared statements completely for pgbouncer compatibility
+    execution_options={"compiled_cache": {}, "prepare_statement": False}
 )
 
 AsyncSessionLocal = sessionmaker(
