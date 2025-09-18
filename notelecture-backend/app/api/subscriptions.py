@@ -4,10 +4,12 @@ from typing import Dict, Any, List
 from datetime import datetime, timedelta
 
 from fastapi import APIRouter, HTTPException, Depends, Request
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, func
 from pydantic import BaseModel
 
-from app.utils.common import get_db
+from app.utils.common import get_db, get_async_db
 from app.db.models import SubscriptionPlan, UserSubscription, User, Lecture, Payment
 from app.auth import current_active_user
 from app.services.paypal import paypal_service
@@ -50,20 +52,23 @@ async def get_subscription_plans(
 
 @router.get("/subscriptions/status")
 async def get_subscription_status(
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(current_active_user)
 ) -> Dict[str, Any]:
     """Get current user's subscription status and usage."""
     try:
         # Get current active subscription
         now = datetime.utcnow()
-        current_sub = db.query(UserSubscription).filter(
-            UserSubscription.user_id == str(current_user.id),
-            UserSubscription.is_active == True,
-            UserSubscription.start_date <= now,
-            UserSubscription.end_date >= now
-        ).first()
-        
+        result = await db.execute(
+            select(UserSubscription).options(selectinload(UserSubscription.plan)).filter(
+                UserSubscription.user_id == str(current_user.id),
+                UserSubscription.is_active == True,
+                UserSubscription.start_date <= now,
+                UserSubscription.end_date >= now
+            )
+        )
+        current_sub = result.scalar_one_or_none()
+
         if current_sub:
             return {
                 "has_subscription": True,
@@ -241,23 +246,29 @@ async def execute_payment(
 
 @router.get("/subscriptions/usage")
 async def get_usage_stats(
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(current_active_user)
 ) -> Dict[str, Any]:
     """Get detailed usage statistics for the current user."""
     try:
         # Get current active subscription
         now = datetime.utcnow()
-        current_sub = db.query(UserSubscription).filter(
-            UserSubscription.user_id == str(current_user.id),
-            UserSubscription.is_active == True,
-            UserSubscription.start_date <= now,
-            UserSubscription.end_date >= now
-        ).first()
-        
+        result = await db.execute(
+            select(UserSubscription).options(selectinload(UserSubscription.plan)).filter(
+                UserSubscription.user_id == str(current_user.id),
+                UserSubscription.is_active == True,
+                UserSubscription.start_date <= now,
+                UserSubscription.end_date >= now
+            )
+        )
+        current_sub = result.scalar_one_or_none()
+
         # Get total lectures created by user
-        total_lectures = db.query(Lecture).filter(Lecture.user_id == str(current_user.id)).count()
-        
+        lecture_count_result = await db.execute(
+            select(func.count(Lecture.id)).filter(Lecture.user_id == str(current_user.id))
+        )
+        total_lectures = lecture_count_result.scalar()
+
         if current_sub:
             return {
                 "subscription_type": "premium",

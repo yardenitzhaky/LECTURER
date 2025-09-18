@@ -2,9 +2,10 @@
 
 import uuid
 import secrets
-from typing import Generator
+from typing import Generator, AsyncGenerator
 from passlib.context import CryptContext
-from app.db.connection import SessionLocal
+from app.db.connection import SessionLocal, get_async_session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 # Password hashing context
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -26,6 +27,11 @@ def get_db_sync():
         yield db
     finally:
         db.close()
+
+async def get_async_db() -> AsyncGenerator[AsyncSession, None]:
+    """Async database dependency for FastAPI routes."""
+    async for session in get_async_session():
+        yield session
 
 
 # --- Authentication Utilities ---

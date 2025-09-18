@@ -5,8 +5,10 @@ from typing import Dict, Any
 
 from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 
-from app.utils.common import get_db
+from app.utils.common import get_db, get_async_db
 from app.db.models import Lecture, Slide, TranscriptionSegment, User
 from app.auth import current_active_user
 from app.schemas import UpdateLectureRequest
@@ -17,12 +19,15 @@ router = APIRouter()
 
 @router.get("/lectures/")
 async def get_user_lectures(
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(current_active_user)
 ) -> Dict[str, Any]:
     """Get all lectures for the current user."""
     try:
-        lectures = db.query(Lecture).filter(Lecture.user_id == str(current_user.id)).order_by(Lecture.id.desc()).all()
+        result = await db.execute(
+            select(Lecture).filter(Lecture.user_id == str(current_user.id)).order_by(Lecture.id.desc())
+        )
+        lectures = result.scalars().all()
         
         return {
             "lectures": [{

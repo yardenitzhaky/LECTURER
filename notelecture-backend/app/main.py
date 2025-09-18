@@ -36,20 +36,43 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.exc import InterfaceError, OperationalError
 
 @app.middleware("http")
-async def handle_db_errors(request: Request, call_next):
-    """Handle database connection errors gracefully."""
+async def handle_errors_with_cors(request: Request, call_next):
+    """Handle all errors gracefully with proper CORS headers."""
+    origin = request.headers.get("origin")
+    cors_headers = {}
+
+    # Check if origin is allowed
+    if origin and origin in allowed_origins:
+        cors_headers.update({
+            "Access-Control-Allow-Origin": origin,
+            "Access-Control-Allow-Credentials": "true",
+            "Access-Control-Allow-Methods": "*",
+            "Access-Control-Allow-Headers": "*",
+        })
+    elif not origin:  # For non-CORS requests
+        cors_headers.update({
+            "Access-Control-Allow-Origin": "*",
+        })
+
     try:
         response = await call_next(request)
+        # Add CORS headers to successful responses too
+        for key, value in cors_headers.items():
+            response.headers[key] = value
         return response
     except (InterfaceError, OperationalError) as e:
         logger.error(f"Database connection error: {str(e)}")
         return JSONResponse(
             status_code=503,
             content={"detail": "Database connection error. Please try again."},
-            headers={
-                "Access-Control-Allow-Origin": request.headers.get("origin", "*"),
-                "Access-Control-Allow-Credentials": "true",
-            }
+            headers=cors_headers
+        )
+    except Exception as e:
+        logger.error(f"Unhandled error: {str(e)}", exc_info=True)
+        return JSONResponse(
+            status_code=500,
+            content={"detail": "Internal server error"},
+            headers=cors_headers
         )
 
 # --- Set up CORS ---
