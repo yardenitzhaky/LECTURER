@@ -67,7 +67,9 @@ async_engine = create_async_engine(
     execution_options={
         "compiled_cache": None,  # Disable compiled cache
         "render_postcompile": True,  # Force inline parameter rendering
-    }
+    },
+    # Disable event loop checking for serverless environments
+    future=True
 )
 
 AsyncSessionLocal = sessionmaker(
@@ -92,12 +94,11 @@ async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
     """Get async database session with proper isolation for serverless."""
     session = None
     try:
+        # Create a fresh session for each request to avoid event loop issues
         session = AsyncSessionLocal()
         yield session
-        if session.in_transaction():
-            await session.commit()  # Commit any pending changes
     except Exception as e:
-        if session and session.in_transaction():
+        if session:
             try:
                 await session.rollback()  # Rollback on error
             except Exception as rollback_error:
@@ -106,10 +107,7 @@ async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
     finally:
         if session:
             try:
-                # Close session with timeout handling
-                import asyncio
-                await asyncio.wait_for(session.close(), timeout=5.0)
-            except asyncio.TimeoutError:
-                print("Session close timed out - connection may have been dropped")
+                # Close session immediately without waiting for transactions
+                await session.close()
             except Exception as close_error:
                 print(f"Error closing session: {close_error}")  # Log but don't raise
