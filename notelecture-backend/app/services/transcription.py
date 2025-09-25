@@ -216,7 +216,17 @@ class TranscriptionService:
                                 logger.info(f"External audio extraction successful: {output_audio_path} (size: {len(response.content)} bytes)")
                                 return output_audio_path
                             else:
-                                raise Exception(f"External service did not return audio data or URL: {result}")
+                                # Handle the specific response format from your external service
+                                logger.warning(f"External service returned success but no audio data. Response: {result}")
+                                logger.info("External service might be returning a different response format.")
+
+                                # Check if this is the expected response format from your service
+                                if result.get("audio_format") == "mp3" and result.get("message") == "Audio extracted successfully":
+                                    logger.error("External service processed the file but didn't return the audio content.")
+                                    logger.error("The external service needs to be updated to return the actual audio file or download URL.")
+                                    raise Exception("External service processed audio but didn't return the file content. Check external service implementation.")
+                                else:
+                                    raise Exception(f"External service did not return audio data or URL: {result}")
                     else:
                         raise Exception(f"External service returned: {result.get('message', 'Unknown error')}")
                         
