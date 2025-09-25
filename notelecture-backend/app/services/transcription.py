@@ -138,14 +138,85 @@ class TranscriptionService:
                         headers=headers
                     )
                     response.raise_for_status()
-                    result = response.json()
-                    
-                    if result.get("status") == "success":
-                        # For now, return the original video path with .mp3 extension
-                        # In production, the external service would return the actual audio file
-                        output_audio_path = str(Path(video_path).with_suffix('.mp3'))
-                        logger.info(f"External audio extraction successful: {output_audio_path}")
+
+                    # Debug logging for external service response
+                    logger.info(f"External service response status: {response.status_code}")
+                    logger.info(f"External service response headers: {dict(response.headers)}")
+                    logger.info(f"External service response content type: {response.headers.get('content-type', 'unknown')}")
+
+                    # Check if response is JSON or audio file
+                    content_type = response.headers.get('content-type', '').lower()
+                    if content_type.startswith('audio/'):
+                        # Response is the audio file directly
+                        upload_dir = "/tmp"
+                        filename = str(uuid4())
+                        output_audio_path = os.path.join(upload_dir, f"{filename}.mp3")
+
+                        with open(output_audio_path, 'wb') as audio_file:
+                            audio_file.write(response.content)
+
+                        logger.info(f"External audio extraction successful (direct file): {output_audio_path} (size: {len(response.content)} bytes)")
                         return output_audio_path
+
+                    # Try to parse as JSON
+                    try:
+                        result = response.json()
+                        logger.info(f"External service JSON response: {result}")
+                    except Exception as json_error:
+                        logger.error(f"Failed to parse external service response as JSON: {json_error}")
+                        logger.error(f"Response content (first 500 chars): {response.text[:500]}")
+                        raise Exception(f"External service returned non-JSON response: {response.text[:200]}")
+
+                    if result.get("status") == "success":
+                        # Get the processed audio file from external service
+                        if "audio_data" in result and result["audio_data"]:
+                            # Handle base64 encoded audio data
+                            import base64
+                            audio_data = base64.b64decode(result["audio_data"])
+
+                            # Save to temporary file
+                            upload_dir = "/tmp"
+                            filename = str(uuid4())
+                            output_audio_path = os.path.join(upload_dir, f"{filename}.mp3")
+
+                            with open(output_audio_path, 'wb') as audio_file:
+                                audio_file.write(audio_data)
+
+                            logger.info(f"External audio extraction successful: {output_audio_path} (size: {len(audio_data)} bytes)")
+                            return output_audio_path
+                        elif "audio_url" in result and result["audio_url"]:
+                            # Handle audio file download URL
+                            audio_url = result["audio_url"]
+
+                            # Download the audio file
+                            audio_response = await client.get(audio_url)
+                            audio_response.raise_for_status()
+
+                            # Save to temporary file
+                            upload_dir = "/tmp"
+                            filename = str(uuid4())
+                            output_audio_path = os.path.join(upload_dir, f"{filename}.mp3")
+
+                            with open(output_audio_path, 'wb') as audio_file:
+                                audio_file.write(audio_response.content)
+
+                            logger.info(f"External audio extraction successful: {output_audio_path} (size: {len(audio_response.content)} bytes)")
+                            return output_audio_path
+                        else:
+                            # Fallback: check if response contains direct file content
+                            if response.headers.get('content-type', '').startswith('audio/'):
+                                # Response is the audio file itself
+                                upload_dir = "/tmp"
+                                filename = str(uuid4())
+                                output_audio_path = os.path.join(upload_dir, f"{filename}.mp3")
+
+                                with open(output_audio_path, 'wb') as audio_file:
+                                    audio_file.write(response.content)
+
+                                logger.info(f"External audio extraction successful: {output_audio_path} (size: {len(response.content)} bytes)")
+                                return output_audio_path
+                            else:
+                                raise Exception(f"External service did not return audio data or URL: {result}")
                     else:
                         raise Exception(f"External service returned: {result.get('message', 'Unknown error')}")
                         
@@ -310,16 +381,85 @@ class TranscriptionService:
                     headers=headers
                 )
                 response.raise_for_status()
-                result = response.json()
-                
-                if result.get("status") == "success":
-                    # Generate a temporary file path for the audio
+
+                # Debug logging for external service response
+                logger.info(f"External video service response status: {response.status_code}")
+                logger.info(f"External video service response headers: {dict(response.headers)}")
+                logger.info(f"External video service response content type: {response.headers.get('content-type', 'unknown')}")
+
+                # Check if response is JSON or audio file
+                content_type = response.headers.get('content-type', '').lower()
+                if content_type.startswith('audio/'):
+                    # Response is the audio file directly
                     upload_dir = "/tmp"
                     filename = str(uuid4())
                     output_path = os.path.join(upload_dir, f"{filename}.mp3")
-                    
-                    logger.info(f"External video download and extraction successful: {output_path}")
+
+                    with open(output_path, 'wb') as audio_file:
+                        audio_file.write(response.content)
+
+                    logger.info(f"External video download and extraction successful (direct file): {output_path} (size: {len(response.content)} bytes)")
                     return output_path
+
+                # Try to parse as JSON
+                try:
+                    result = response.json()
+                    logger.info(f"External video service JSON response: {result}")
+                except Exception as json_error:
+                    logger.error(f"Failed to parse external video service response as JSON: {json_error}")
+                    logger.error(f"Response content (first 500 chars): {response.text[:500]}")
+                    raise Exception(f"External video service returned non-JSON response: {response.text[:200]}")
+
+                if result.get("status") == "success":
+                    # Get the processed audio file from external service
+                    if "audio_data" in result and result["audio_data"]:
+                        # Handle base64 encoded audio data
+                        import base64
+                        audio_data = base64.b64decode(result["audio_data"])
+
+                        # Save to temporary file
+                        upload_dir = "/tmp"
+                        filename = str(uuid4())
+                        output_path = os.path.join(upload_dir, f"{filename}.mp3")
+
+                        with open(output_path, 'wb') as audio_file:
+                            audio_file.write(audio_data)
+
+                        logger.info(f"External video download and extraction successful: {output_path} (size: {len(audio_data)} bytes)")
+                        return output_path
+                    elif "audio_url" in result and result["audio_url"]:
+                        # Handle audio file download URL
+                        audio_url = result["audio_url"]
+
+                        # Download the audio file
+                        audio_response = await client.get(audio_url)
+                        audio_response.raise_for_status()
+
+                        # Save to temporary file
+                        upload_dir = "/tmp"
+                        filename = str(uuid4())
+                        output_path = os.path.join(upload_dir, f"{filename}.mp3")
+
+                        with open(output_path, 'wb') as audio_file:
+                            audio_file.write(audio_response.content)
+
+                        logger.info(f"External video download and extraction successful: {output_path} (size: {len(audio_response.content)} bytes)")
+                        return output_path
+                    else:
+                        # Fallback: check if response contains direct file content
+                        if response.headers.get('content-type', '').startswith('audio/'):
+                            # Response is the audio file itself
+                            upload_dir = "/tmp"
+                            filename = str(uuid4())
+                            output_path = os.path.join(upload_dir, f"{filename}.mp3")
+
+                            with open(output_path, 'wb') as audio_file:
+                                audio_file.write(response.content)
+
+                            logger.info(f"External video download and extraction successful: {output_path} (size: {len(response.content)} bytes)")
+                            return output_path
+                        else:
+                            raise Exception(f"External service did not return audio data or URL: {result}")
                 else:
                     raise Exception(f"External service returned: {result.get('message', 'Unknown error')}")
                     
