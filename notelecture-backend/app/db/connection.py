@@ -109,8 +109,16 @@ async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
     """Get async database session with proper isolation for serverless and pgbouncer compatibility."""
     session = None
     try:
-        # Create a fresh session for each request to avoid event loop issues
-        session = AsyncSessionLocal()
+        # Create a fresh sessionmaker for each request to avoid event loop binding issues
+        # This prevents the "bound to different event loop" error in serverless environments
+        fresh_sessionmaker = sessionmaker(
+            async_engine,
+            class_=AsyncSession,
+            expire_on_commit=False,
+            autoflush=False,
+            autocommit=False
+        )
+        session = fresh_sessionmaker()
 
         # For debugging: log connection info
         print(f"Created new async session for request")
