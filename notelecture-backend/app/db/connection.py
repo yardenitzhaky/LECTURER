@@ -55,7 +55,6 @@ connect_args = {
     "statement_cache_size": 0,  # CRITICAL: Disable prepared statements completely
     "prepared_statement_cache_size": 0,  # Disable prepared statement cache
     "prepared_statement_name_func": generate_unique_prepared_statement_name,  # Use UUID-based names
-    "connection_class": None,  # Use default connection class
 }
 
 # Add SSL configuration for production
