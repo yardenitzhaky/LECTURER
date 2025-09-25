@@ -74,7 +74,7 @@ class TranscriptionService:
     async def extract_audio(self, video_path: str) -> str:
         """Extracts audio from a local video file into MP3 format."""
         # Try external service first if moviepy is not available or external service is configured
-        if not MOVIEPY_AVAILABLE or settings.EXTERNAL_SERVICE_URL:
+        if not MOVIEPY_AVAILABLE or (settings.EXTERNAL_SERVICE_URL and settings.EXTERNAL_SERVICE_URL.strip()):
             try:
                 return await self._extract_audio_external(video_path)
             except Exception as e:
@@ -220,7 +220,7 @@ class TranscriptionService:
     async def download_and_extract_audio(self, video_url: str) -> str:
         """Download video from URL and extract audio."""
         # Try external service first if yt-dlp/moviepy are not available or external service is configured
-        if not (YT_DLP_AVAILABLE and MOVIEPY_AVAILABLE) or settings.EXTERNAL_SERVICE_URL:
+        if not (YT_DLP_AVAILABLE and MOVIEPY_AVAILABLE) or (settings.EXTERNAL_SERVICE_URL and settings.EXTERNAL_SERVICE_URL.strip()):
             try:
                 return await self._download_and_extract_external(video_url)
             except Exception as e:
