@@ -39,15 +39,23 @@ else:
 
 # Configure asyncpg for serverless environments like Vercel
 import os
+from uuid import uuid4
+
+# Generate unique prepared statement names for pgbouncer compatibility
+def generate_unique_prepared_statement_name():
+    """Generate unique prepared statement names to avoid conflicts with pgbouncer."""
+    return f"__asyncpg_{uuid4().hex[:8]}__"
+
 connect_args = {
     "server_settings": {
         "application_name": "notelecture_vercel",
         "jit": "off",  # Disable JIT for better compatibility
     },
-    "command_timeout": 10,  # Shorter timeout for NullPool connections
+    "command_timeout": 5,  # Shorter timeout for NullPool connections
     "statement_cache_size": 0,  # CRITICAL: Disable prepared statements completely
     "prepared_statement_cache_size": 0,  # Disable prepared statement cache
-    "prepared_statement_name_func": None,  # Disable prepared statement naming
+    "prepared_statement_name_func": generate_unique_prepared_statement_name,  # Use UUID-based names
+    "connection_class": None,  # Use default connection class
 }
 
 # Add SSL configuration for production
@@ -56,19 +64,27 @@ if "supabase.co" in async_database_url or os.getenv("VERCEL"):
 
 # Add connection pooling configuration optimized for serverless
 from sqlalchemy.pool import NullPool
+
+# CRITICAL: Add pgbouncer compatibility parameters to the URL
+# This disables prepared statements at the connection level
+if "?" in async_database_url:
+    async_database_url += "&prepared_statement_cache_size=0&statement_cache_size=0"
+else:
+    async_database_url += "?prepared_statement_cache_size=0&statement_cache_size=0"
+
 async_engine = create_async_engine(
     async_database_url,
     connect_args=connect_args,
     poolclass=NullPool,  # Use NullPool for serverless environments
     pool_recycle=300,  # Recycle connections every 5 minutes
-    pool_pre_ping=True,  # Verify connections before use
+    pool_pre_ping=False,  # CRITICAL: Disable pre-ping to avoid prepared statements
     echo=False,
     # NUCLEAR OPTION: Force all statements to execute as plain text
     execution_options={
         "compiled_cache": None,  # Disable compiled cache
         "render_postcompile": True,  # Force inline parameter rendering
+        "autocommit": False,  # Use explicit transaction control
     },
-    # Disable event loop checking for serverless environments
     future=True
 )
 
@@ -91,13 +107,18 @@ def get_session():
 
 
 async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
-    """Get async database session with proper isolation for serverless."""
+    """Get async database session with proper isolation for serverless and pgbouncer compatibility."""
     session = None
     try:
         # Create a fresh session for each request to avoid event loop issues
         session = AsyncSessionLocal()
+
+        # For debugging: log connection info
+        print(f"Created new async session for request")
+
         yield session
     except Exception as e:
+        print(f"Session error occurred: {type(e).__name__}: {e}")
         if session:
             try:
                 await session.rollback()  # Rollback on error
@@ -109,5 +130,6 @@ async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
             try:
                 # Close session immediately without waiting for transactions
                 await session.close()
+                print(f"Successfully closed async session")
             except Exception as close_error:
                 print(f"Error closing session: {close_error}")  # Log but don't raise
