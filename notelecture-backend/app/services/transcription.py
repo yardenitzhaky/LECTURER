@@ -56,17 +56,27 @@ class TranscriptionService:
         """Synchronous part of audio extraction."""
         try:
             logger.info(f"[Sync] Extracting audio from '{video_path}' to '{output_audio_path}'")
-            # Use ffmpeg=settings.FFMPEG_PATH if you added an FFMPEG_PATH setting
-            # from app.core.config import settings # Import settings inside if needed
-            # config_path = getattr(settings, 'FFMPEG_PATH', None)
-            # video = mp.VideoFileClip(video_path, ffmpeg_binary=config_path) if config_path else mp.VideoFileClip(video_path)
+
+            # Check if ffmpeg is available
+            import subprocess
+            try:
+                subprocess.run(['ffmpeg', '-version'], capture_output=True, check=True)
+                logger.info("[Sync] ffmpeg is available")
+            except (subprocess.CalledProcessError, FileNotFoundError) as e:
+                logger.error(f"[Sync] ffmpeg not available: {e}")
+                raise Exception("ffmpeg binary not available - required for audio extraction")
 
             with mp.VideoFileClip(video_path) as video:
                 # Added check for audio track
                 if video.audio is None:
                      raise ValueError(f"No audio track found in video file: {video_path}")
                 video.audio.write_audiofile(output_audio_path, codec='libmp3lame', logger=None)
-            logger.info("[Sync] Audio extraction successful (MP3).")
+
+            # Verify the output file was created
+            if not os.path.exists(output_audio_path):
+                raise FileNotFoundError(f"Audio extraction completed but output file not found: {output_audio_path}")
+
+            logger.info(f"[Sync] Audio extraction successful (MP3). File size: {os.path.getsize(output_audio_path)} bytes")
         except Exception as e:
             logger.error(f"[Sync] Error extracting audio: {str(e)}")
             raise # Re-raise to be caught by the async wrapper
@@ -81,7 +91,7 @@ class TranscriptionService:
                 logger.warning(f"External audio extraction failed: {e}")
                 if not MOVIEPY_AVAILABLE:
                     raise Exception("Audio extraction requires moviepy which is not available - please use external service")
-        
+
         # Fallback to local processing if moviepy is available
         if MOVIEPY_AVAILABLE:
             output_audio_path = str(Path(video_path).with_suffix('.mp3'))
@@ -92,6 +102,18 @@ class TranscriptionService:
                 return output_audio_path
             except Exception as e:
                 logger.error(f"Local audio extraction failed: {e}")
+                # If ffmpeg is not available, suggest using external service
+                if "ffmpeg" in str(e).lower():
+                    logger.warning("ffmpeg not available - local audio extraction not possible in this environment")
+                    if settings.EXTERNAL_SERVICE_URL and settings.EXTERNAL_SERVICE_URL.strip():
+                        logger.info("Attempting fallback to external service...")
+                        try:
+                            return await self._extract_audio_external(video_path)
+                        except Exception as ext_e:
+                            logger.error(f"External service fallback also failed: {ext_e}")
+                            raise Exception(f"Both local and external audio extraction failed. Local: {e}, External: {ext_e}")
+                    else:
+                        raise Exception("Local audio extraction failed due to missing ffmpeg, and no external service configured")
                 raise
         else:
             raise Exception("Audio extraction requires moviepy which is not available - please use external service")
@@ -138,6 +160,15 @@ class TranscriptionService:
     def _sync_download_and_extract(self, video_url: str):
         """Synchronous part of downloading and extracting audio."""
         try:
+            # Check if ffmpeg is available
+            import subprocess
+            try:
+                subprocess.run(['ffmpeg', '-version'], capture_output=True, check=True)
+                logger.info("[Sync] ffmpeg is available for yt-dlp")
+            except (subprocess.CalledProcessError, FileNotFoundError) as e:
+                logger.error(f"[Sync] ffmpeg not available for yt-dlp: {e}")
+                raise Exception("ffmpeg binary not available - required for video download and audio extraction")
+
             # Use /tmp directory for Vercel serverless environment
             upload_dir = "/tmp"
             filename = str(uuid4())
@@ -146,6 +177,7 @@ class TranscriptionService:
 
             logger.info(f"[Sync] Downloading from URL: {video_url}")
             logger.info(f"[Sync] Temporary path template: {temp_path_template}")
+            logger.info(f"[Sync] UUID filename: {filename}")
 
             ydl_opts = {
                 'format': 'worstaudio/worst', # Get the worst quality audio stream (smallest size, fastest download)
@@ -176,17 +208,24 @@ class TranscriptionService:
                 # Or checking the files created in the upload directory
                 logger.info("[Sync] Download completed, checking for output file.")
                 expected_output_prefix = os.path.join(upload_dir, filename)
+                # List all files in temp directory for debugging
+                all_files_in_tmp = os.listdir(upload_dir)
+                files_with_our_prefix = [f for f in all_files_in_tmp if f.startswith(filename)]
+                logger.info(f"[Sync] Files in /tmp with our prefix '{filename}': {files_with_our_prefix}")
+
                 # Search for files starting with the filename and ending with .mp3
-                potential_files = [f for f in os.listdir(upload_dir) if f.startswith(filename) and f.endswith('.mp3')]
+                potential_files = [f for f in all_files_in_tmp if f.startswith(filename) and f.endswith('.mp3')]
 
                 if potential_files:
                     # Assume the first found MP3 file is the correct one
                     output_path = os.path.join(upload_dir, potential_files[0])
-                    logger.info(f"[Sync] Found extracted MP3 file: {output_path}")
+                    file_size = os.path.getsize(output_path)
+                    logger.info(f"[Sync] Found extracted MP3 file: {output_path} (size: {file_size} bytes)")
                 else:
                      # This might happen if extraction failed but download succeeded
-                    all_temp_files = [f for f in os.listdir(upload_dir) if f.startswith(filename)]
+                    all_temp_files = [f for f in all_files_in_tmp if f.startswith(filename)]
                     logger.warning(f"[Sync] Expected MP3 output not found. Found temporary files: {all_temp_files}")
+                    logger.warning(f"[Sync] All files in /tmp: {all_files_in_tmp[:10]}...")  # Show first 10 files
                     if all_temp_files:
                          # Clean up temp files if MP3 wasn't created
                          for temp_file in all_temp_files:
@@ -237,6 +276,18 @@ class TranscriptionService:
                 return output_path
             except Exception as e:
                 logger.error(f"Local video download failed: {e}")
+                # If ffmpeg is not available, suggest using external service
+                if "ffmpeg" in str(e).lower():
+                    logger.warning("ffmpeg not available - local video download and extraction not possible in this environment")
+                    if settings.EXTERNAL_SERVICE_URL and settings.EXTERNAL_SERVICE_URL.strip():
+                        logger.info("Attempting fallback to external service...")
+                        try:
+                            return await self._download_and_extract_external(video_url)
+                        except Exception as ext_e:
+                            logger.error(f"External service fallback also failed: {ext_e}")
+                            raise Exception(f"Both local and external video processing failed. Local: {e}, External: {ext_e}")
+                    else:
+                        raise Exception("Local video processing failed due to missing ffmpeg, and no external service configured")
                 raise
         else:
             raise Exception("Video download requires yt_dlp which is not available - please use external service")

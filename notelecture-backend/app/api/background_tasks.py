@@ -42,14 +42,19 @@ async def process_video_background(
         # 1. Audio Handling
         update_status("downloading")
         if video_file_to_delete:
+            logger.info(f"[BG Task {lecture_id}] Processing local video file: {video_path_or_url}")
             if not os.path.exists(video_path_or_url):
                 raise FileNotFoundError(f"Video file missing: {video_path_or_url}")
             audio_path = await transcription_service.extract_audio(video_path_or_url)
         else:
+            logger.info(f"[BG Task {lecture_id}] Processing video URL: {video_path_or_url}")
             audio_path = await transcription_service.download_and_extract_audio(video_path_or_url)
+
         if not audio_path or not os.path.exists(audio_path):
+            logger.error(f"[BG Task {lecture_id}] Audio processing failed - file not found: {audio_path}")
+            logger.error(f"[BG Task {lecture_id}] Checking if file exists: {os.path.exists(audio_path) if audio_path else 'None'}")
             raise FileNotFoundError(f"Audio processing failed: {audio_path}")
-        logger.info(f"[BG Task {lecture_id}] Audio ready: {audio_path}")
+        logger.info(f"[BG Task {lecture_id}] Audio ready: {audio_path} (size: {os.path.getsize(audio_path)} bytes)")
 
         # 2. Transcription
         update_status("transcribing")
