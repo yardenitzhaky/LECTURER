@@ -1,3 +1,5 @@
+# this is the external processing service for NoteLecture, not actually in the repo, just a copy here for reference
+
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, BackgroundTasks
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -59,22 +61,13 @@ async def process_pdf(file: UploadFile = File(...)):
 
 @app.post("/extract-audio/")
 async def extract_audio(video_file: UploadFile = File(...)):
-    """Extract audio from uploaded video file"""
+    """Extract audio from uploaded video file using ffmpeg directly"""
+    import subprocess
+
     temp_video_path = None
     temp_audio_path = None
 
     try:
-        try:
-            from moviepy.editor import VideoFileClip
-            has_moviepy = True
-        except ImportError:
-            has_moviepy = False
-            logger.error("moviepy not available")
-            raise HTTPException(
-                status_code=500,
-                detail="Audio extraction requires moviepy which is not installed"
-            )
-
         logger.info(f"Extracting audio from: {video_file.filename} (size: {video_file.size if hasattr(video_file, 'size') else 'unknown'})")
 
         # Save uploaded video to temporary file
@@ -88,42 +81,37 @@ async def extract_audio(video_file: UploadFile = File(...)):
         with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as tmp_audio:
             temp_audio_path = tmp_audio.name
 
-        # Extract audio using moviepy
-        logger.info("Starting audio extraction with moviepy...")
-        video = VideoFileClip(temp_video_path, audio_fps=44100, verbose=False)
+        # Use ffmpeg directly (faster and more reliable than moviepy)
+        logger.info("Extracting audio with ffmpeg...")
 
-        if video.audio is None:
-            video.close()
-            raise ValueError("No audio track found in video file")
+        ffmpeg_cmd = [
+            'ffmpeg',
+            '-i', temp_video_path,
+            '-vn',  # No video
+            '-acodec', 'libmp3lame',
+            '-ab', '128k',  # 128kbps bitrate
+            '-ar', '44100',  # 44.1kHz sample rate
+            '-y',  # Overwrite output file
+            '-loglevel', 'error',  # Only show errors
+            temp_audio_path
+        ]
 
-        # Extract audio to MP3 with minimal logging to prevent hanging
-        logger.info("Writing audio file...")
-        import sys
-        import io
+        result = subprocess.run(
+            ffmpeg_cmd,
+            capture_output=True,
+            text=True,
+            timeout=120  # 2 minute timeout
+        )
 
-        # Redirect stdout/stderr to prevent moviepy progress bars from hanging
-        old_stdout = sys.stdout
-        old_stderr = sys.stderr
-        sys.stdout = io.StringIO()
-        sys.stderr = io.StringIO()
+        if result.returncode != 0:
+            logger.error(f"ffmpeg error: {result.stderr}")
+            raise Exception(f"ffmpeg failed with code {result.returncode}: {result.stderr}")
 
-        try:
-            video.audio.write_audiofile(
-                temp_audio_path,
-                codec='libmp3lame',
-                bitrate='128k',
-                fps=44100,
-                nbytes=2,
-                buffersize=2000,
-                logger=None,
-                verbose=False
-            )
-        finally:
-            sys.stdout = old_stdout
-            sys.stderr = old_stderr
-
-        video.close()
         logger.info(f"Audio extracted to: {temp_audio_path}")
+
+        # Verify audio file was created
+        if not os.path.exists(temp_audio_path) or os.path.getsize(temp_audio_path) == 0:
+            raise Exception("Audio file was not created or is empty")
 
         # Read the audio file and encode as base64
         with open(temp_audio_path, 'rb') as audio_file:
@@ -140,6 +128,9 @@ async def extract_audio(video_file: UploadFile = File(...)):
             "message": "Audio extracted successfully"
         })
 
+    except subprocess.TimeoutExpired:
+        logger.error("ffmpeg timeout after 2 minutes")
+        raise HTTPException(status_code=500, detail="Audio extraction timed out")
     except Exception as e:
         logger.error(f"Error extracting audio: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Audio extraction failed: {str(e)}")

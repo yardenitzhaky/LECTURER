@@ -51,7 +51,8 @@ connect_args = {
         "application_name": "notelecture_vercel",
         "jit": "off",  # Disable JIT for better compatibility
     },
-    "command_timeout": 5,  # Shorter timeout for NullPool connections
+    "command_timeout": 30,  # Allow enough time for connection cleanup
+    "timeout": 30,  # Connection timeout
     "statement_cache_size": 0,  # CRITICAL: Disable prepared statements completely
     "prepared_statement_cache_size": 0,  # Disable prepared statement cache
     "prepared_statement_name_func": generate_unique_prepared_statement_name,  # Use UUID-based names
@@ -135,8 +136,11 @@ async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
     finally:
         if session:
             try:
-                # Close session immediately without waiting for transactions
-                await session.close()
+                # Close session with timeout protection
+                import asyncio
+                await asyncio.wait_for(session.close(), timeout=10.0)
                 print(f"Successfully closed async session")
+            except asyncio.TimeoutError:
+                print(f"Session close timed out - ignoring (connection will be cleaned up by pool)")
             except Exception as close_error:
                 print(f"Error closing session: {close_error}")  # Log but don't raise
