@@ -155,25 +155,46 @@ async def transcribe_lecture(
             # Get backend URL from settings
             backend_url = settings.BACKEND_URL or "https://notelecture-backend.vercel.app"
 
-            # Call external service asynchronously (fire and forget)
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                await client.post(
-                    f"{settings.EXTERNAL_SERVICE_URL}/process-lecture-complete/",
-                    data={
-                        "lecture_id": lecture_id,
-                        "video_path": video_path_str,
-                        "slides_data": json.dumps(slides_list),
-                        "backend_url": backend_url,
-                        "api_key": settings.EXTERNAL_SERVICE_API_KEY or ""
-                    }
-                )
+            # Call external service
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                # Prepare data for multipart form
+                data = {
+                    "lecture_id": str(lecture_id),
+                    "slides_data": json.dumps(slides_list),
+                    "backend_url": backend_url,
+                    "api_key": settings.EXTERNAL_SERVICE_API_KEY or ""
+                }
 
-            logger.info(f"Triggered external processing for lecture {lecture_id}")
+                # If video file was uploaded, send it to Cloud Run
+                # If video URL, just send the URL
+                if video:
+                    # Re-read the video file and send to Cloud Run
+                    with open(video_path_str, 'rb') as video_file:
+                        files = {
+                            "video_file": (original_video_filename, video_file, "video/mp4")
+                        }
+                        response = await client.post(
+                            f"{settings.EXTERNAL_SERVICE_URL}/process-lecture-complete/",
+                            data=data,
+                            files=files
+                        )
+                else:
+                    # For URL, just send as form data
+                    data["video_url"] = video_url
+                    response = await client.post(
+                        f"{settings.EXTERNAL_SERVICE_URL}/process-lecture-complete/",
+                        data=data
+                    )
+
+                response.raise_for_status()
+                logger.info(f"Triggered external processing for lecture {lecture_id}: {response.status_code}")
 
         except Exception as ext_err:
-            logger.error(f"Failed to trigger external processing: {ext_err}")
-            # Don't fail the request - just log the error
-            # The lecture will remain in "processing" status
+            logger.error(f"Failed to trigger external processing: {ext_err}", exc_info=True)
+            # Mark as failed so user knows
+            update_lecture_status(db, lecture_id, "failed")
+            db.commit()
+            raise HTTPException(status_code=500, detail=f"Failed to start processing: {str(ext_err)}")
 
         return {"message": "Processing started", "lecture_id": lecture_id}
 

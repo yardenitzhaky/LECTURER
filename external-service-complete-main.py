@@ -255,7 +255,8 @@ async def match_slides(
 
 async def _process_lecture_complete(
     lecture_id: int,
-    video_path: str,
+    video_file_content: Optional[bytes],
+    video_url: Optional[str],
     slides_data: List[Dict],
     backend_url: str,
     api_key: Optional[str] = None
@@ -279,25 +280,23 @@ async def _process_lecture_complete(
             # Step 1: Extract or download audio
             logger.info(f"[Lecture {lecture_id}] Step 1: Audio extraction")
 
-            if video_path.startswith(('http://', 'https://')):
+            if video_url:
                 # Download from URL
-                logger.info(f"[Lecture {lecture_id}] Downloading from URL: {video_path[:100]}...")
+                logger.info(f"[Lecture {lecture_id}] Downloading from URL: {video_url[:100]}...")
                 audio_response = await client.post(
                     f"{os.getenv('SELF_URL', 'http://localhost:8080')}/download-extract-audio/",
-                    data={"video_url": video_path}
+                    data={"video_url": video_url}
                 )
-            else:
-                # Video file path - need to download from backend first
-                logger.info(f"[Lecture {lecture_id}] Fetching video file from backend")
-                video_response = await client.get(f"{backend_url}/api/lectures/{lecture_id}/video")
-                video_response.raise_for_status()
-
-                # Extract audio from downloaded video
-                files = {"video_file": ("video.mp4", video_response.content, "video/mp4")}
+            elif video_file_content:
+                # Video file was uploaded - extract audio from it
+                logger.info(f"[Lecture {lecture_id}] Extracting audio from uploaded video ({len(video_file_content)} bytes)")
+                files = {"video_file": ("video.mp4", video_file_content, "video/mp4")}
                 audio_response = await client.post(
                     f"{os.getenv('SELF_URL', 'http://localhost:8080')}/extract-audio/",
                     files=files
                 )
+            else:
+                raise Exception("Neither video_file nor video_url provided")
 
             audio_response.raise_for_status()
             audio_result = audio_response.json()
@@ -385,9 +384,10 @@ async def _process_lecture_complete(
 async def process_lecture_complete(
     background_tasks: BackgroundTasks,
     lecture_id: int = Form(...),
-    video_path: str = Form(...),
     slides_data: str = Form(...),
     backend_url: str = Form(...),
+    video_file: Optional[UploadFile] = File(None),
+    video_url: Optional[str] = Form(None),
     api_key: Optional[str] = Form(None)
 ):
     """
@@ -396,7 +396,8 @@ async def process_lecture_complete(
 
     Parameters:
     - lecture_id: ID of the lecture being processed
-    - video_path: Path or URL to the video file
+    - video_file: Uploaded video file (multipart)
+    - video_url: OR video URL (form data)
     - slides_data: JSON string of slides data [{"index": 0, "image_data": "..."}, ...]
     - backend_url: Main backend URL to send results back to
     - api_key: Optional API key for backend authentication
@@ -404,11 +405,18 @@ async def process_lecture_complete(
     try:
         slides = json.loads(slides_data)
 
+        # Read video file if provided
+        video_content = None
+        if video_file:
+            video_content = await video_file.read()
+            logger.info(f"[Lecture {lecture_id}] Received video file: {len(video_content)} bytes")
+
         # Add to background tasks (Cloud Run supports this properly unlike Vercel)
         background_tasks.add_task(
             _process_lecture_complete,
             lecture_id=lecture_id,
-            video_path=video_path,
+            video_file_content=video_content,
+            video_url=video_url,
             slides_data=slides,
             backend_url=backend_url,
             api_key=api_key
