@@ -11,5 +11,11 @@
       "src": "/(.*)",
       "dest": "app/main.py"
     }
+  ],
+  "crons": [
+    {
+      "path": "/api/processor/process-pending",
+      "schedule": "*/2 * * * *"
+    }
   ]
 }
