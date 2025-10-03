@@ -202,6 +202,27 @@ class TranscriptionService:
 
                             logger.info(f"External audio extraction successful: {output_audio_path} (size: {len(audio_response.content)} bytes)")
                             return output_audio_path
+                        elif "file_id" in result and result["file_id"]:
+                            # Handle file_id - download from external service
+                            file_id = result["file_id"]
+                            logger.info(f"Downloading audio file with ID: {file_id}")
+
+                            download_response = await client.get(
+                                f"{settings.EXTERNAL_SERVICE_URL}/download-audio/{file_id}",
+                                headers=headers
+                            )
+                            download_response.raise_for_status()
+
+                            # Save to temporary file
+                            upload_dir = "/tmp"
+                            filename = str(uuid4())
+                            output_audio_path = os.path.join(upload_dir, f"{filename}.mp3")
+
+                            with open(output_audio_path, 'wb') as audio_file:
+                                audio_file.write(download_response.content)
+
+                            logger.info(f"External audio extraction successful via file_id: {output_audio_path} (size: {len(download_response.content)} bytes)")
+                            return output_audio_path
                         else:
                             # Fallback: check if response contains direct file content
                             if response.headers.get('content-type', '').startswith('audio/'):
