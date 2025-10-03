@@ -86,6 +86,7 @@ async def extract_audio(video_file: UploadFile = File(...)):
 
         ffmpeg_cmd = [
             'ffmpeg',
+            '-nostdin',  # Don't wait for stdin input (prevents hanging)
             '-i', temp_video_path,
             '-vn',  # No video
             '-acodec', 'libmp3lame',
@@ -98,9 +99,10 @@ async def extract_audio(video_file: UploadFile = File(...)):
 
         result = subprocess.run(
             ffmpeg_cmd,
+            stdin=subprocess.DEVNULL,  # Close stdin to prevent hanging
             capture_output=True,
             text=True,
-            timeout=120  # 2 minute timeout
+            timeout=120  # 2 minute timeout should be enough now
         )
 
         if result.returncode != 0:
@@ -129,8 +131,8 @@ async def extract_audio(video_file: UploadFile = File(...)):
         })
 
     except subprocess.TimeoutExpired:
-        logger.error("ffmpeg timeout after 2 minutes")
-        raise HTTPException(status_code=500, detail="Audio extraction timed out")
+        logger.error("ffmpeg timeout after 5 minutes")
+        raise HTTPException(status_code=500, detail="Audio extraction timed out after 5 minutes")
     except Exception as e:
         logger.error(f"Error extracting audio: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Audio extraction failed: {str(e)}")
