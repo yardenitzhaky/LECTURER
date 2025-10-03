@@ -68,12 +68,19 @@ async def extract_audio(video_file: UploadFile = File(...)):
     temp_audio_path = None
 
     try:
-        logger.info(f"Extracting audio from: {video_file.filename} (size: {video_file.size if hasattr(video_file, 'size') else 'unknown'})")
+        logger.info(f"=== EXTRACT AUDIO ENDPOINT CALLED ===")
+        logger.info(f"Video file name: {video_file.filename}")
+        logger.info(f"Video file content_type: {video_file.content_type}")
+        logger.info(f"Video file size attr: {video_file.size if hasattr(video_file, 'size') else 'N/A'}")
 
         # Save uploaded video to temporary file
         with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tmp_video:
             content = await video_file.read()
+            if len(content) == 0:
+                raise Exception("Video file is empty (0 bytes)")
             tmp_video.write(content)
+            tmp_video.flush()  # Ensure data is written to disk
+            os.fsync(tmp_video.fileno())  # Force OS to write to disk
             temp_video_path = tmp_video.name
             logger.info(f"Saved video to temp file: {temp_video_path} ({len(content)} bytes)")
 
@@ -81,46 +88,155 @@ async def extract_audio(video_file: UploadFile = File(...)):
         with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as tmp_audio:
             temp_audio_path = tmp_audio.name
 
+        # Probe video file first to ensure it's valid
+        logger.info("Probing video file with ffprobe...")
+        probe_cmd = [
+            'ffprobe',
+            '-v', 'error',
+            '-show_entries', 'format=duration,format_name,size',
+            '-of', 'json',
+            temp_video_path
+        ]
+
+        video_is_valid = False
+        try:
+            probe_result = subprocess.run(
+                probe_cmd,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=5  # Reduced timeout for faster failure
+            )
+            if probe_result.returncode == 0:
+                import json as json_lib
+                probe_data = json_lib.loads(probe_result.stdout.decode('utf-8'))
+                duration = probe_data.get('format', {}).get('duration', 'unknown')
+                format_name = probe_data.get('format', {}).get('format_name', 'unknown')
+                logger.info(f"Video metadata: duration={duration}s, format={format_name}")
+                video_is_valid = True
+            else:
+                stderr_output = probe_result.stderr.decode('utf-8', errors='ignore')
+                logger.warning(f"ffprobe returned code {probe_result.returncode}, stderr: {stderr_output[:200]}")
+        except subprocess.TimeoutExpired:
+            logger.error("ffprobe timed out after 5 seconds - video file may have codec issues")
+            logger.error("Will attempt ffmpeg extraction anyway with strict timeouts")
+        except Exception as probe_error:
+            logger.warning(f"Failed to probe video: {probe_error}")
+
+        if not video_is_valid:
+            logger.warning("Video validation failed, but attempting extraction with copy codec...")
+
         # Use ffmpeg directly (faster and more reliable than moviepy)
         logger.info("Extracting audio with ffmpeg...")
+        logger.info(f"Video file exists: {os.path.exists(temp_video_path)}, size: {os.path.getsize(temp_video_path) if os.path.exists(temp_video_path) else 'N/A'}")
+        logger.info(f"Target audio path: {temp_audio_path}")
 
+        # Build ffmpeg command with analysis limits to prevent hanging
         ffmpeg_cmd = [
             'ffmpeg',
             '-nostdin',  # Don't wait for stdin input (prevents hanging)
+            '-analyzeduration', '5000000',  # Limit analysis to 5 seconds of content
+            '-probesize', '5000000',  # Limit probe size to 5MB
             '-i', temp_video_path,
             '-vn',  # No video
             '-acodec', 'libmp3lame',
-            '-ab', '128k',  # 128kbps bitrate
-            '-ar', '44100',  # 44.1kHz sample rate
+            '-ab', '64k',  # Lower bitrate for faster processing
+            '-ar', '22050',  # Lower sample rate for faster processing
+            '-ac', '1',  # Mono audio
+            '-threads', '2',  # Limit CPU threads
+            '-max_muxing_queue_size', '1024',  # Limit buffer
             '-y',  # Overwrite output file
-            '-loglevel', 'error',  # Only show errors
+            '-loglevel', 'warning',  # Show warnings and errors
             temp_audio_path
         ]
 
-        result = subprocess.run(
-            ffmpeg_cmd,
-            stdin=subprocess.DEVNULL,  # Close stdin to prevent hanging
-            capture_output=True,
-            text=True,
-            timeout=120  # 2 minute timeout should be enough now
-        )
+        logger.info(f"Running ffmpeg command: {' '.join(ffmpeg_cmd)}")
+        import time
+        start_time = time.time()
+        last_progress_log = start_time
 
-        if result.returncode != 0:
-            logger.error(f"ffmpeg error: {result.stderr}")
-            raise Exception(f"ffmpeg failed with code {result.returncode}: {result.stderr}")
+        try:
+            # Use Popen with PIPE for stderr to capture progress
+            process = subprocess.Popen(
+                ffmpeg_cmd,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                close_fds=True
+            )
+
+            logger.info(f"ffmpeg process started, PID: {process.pid}")
+
+            # Wait for completion with timeout (increased to 5 minutes)
+            # Log progress every 10 seconds
+            try:
+                while True:
+                    try:
+                        returncode = process.wait(timeout=10)
+                        # Process completed
+                        elapsed = time.time() - start_time
+                        logger.info(f"ffmpeg completed in {elapsed:.2f} seconds with return code {returncode}")
+
+                        # Capture any stderr output
+                        stderr_output = process.stderr.read().decode('utf-8', errors='ignore')
+                        if stderr_output.strip():
+                            logger.info(f"ffmpeg stderr: {stderr_output[:500]}")
+
+                        if returncode != 0:
+                            logger.error(f"ffmpeg failed with return code {returncode}")
+                            raise Exception(f"ffmpeg failed with code {returncode}")
+                        break
+
+                    except subprocess.TimeoutExpired:
+                        # Still running, log progress
+                        elapsed = time.time() - start_time
+                        if elapsed - last_progress_log >= 10:
+                            logger.info(f"ffmpeg still running... {elapsed:.0f}s elapsed")
+                            last_progress_log = elapsed
+
+                        # Check if we've exceeded the overall timeout
+                        if elapsed > 300:
+                            logger.error(f"ffmpeg timeout after {elapsed:.2f} seconds (limit: 300s)")
+                            process.kill()
+                            process.wait()
+                            raise subprocess.TimeoutExpired(ffmpeg_cmd, 300)
+
+            except subprocess.TimeoutExpired:
+                elapsed = time.time() - start_time
+                logger.error(f"ffmpeg timeout after {elapsed:.2f} seconds")
+                process.kill()
+                process.wait()
+                raise
+
+        except subprocess.TimeoutExpired as e:
+            elapsed = time.time() - start_time
+            logger.error(f"ffmpeg timeout exception: {elapsed:.2f} seconds")
+            raise
 
         logger.info(f"Audio extracted to: {temp_audio_path}")
 
         # Verify audio file was created
-        if not os.path.exists(temp_audio_path) or os.path.getsize(temp_audio_path) == 0:
-            raise Exception("Audio file was not created or is empty")
+        logger.info(f"Verifying audio file at: {temp_audio_path}")
+        if not os.path.exists(temp_audio_path):
+            logger.error(f"Audio file does not exist at path: {temp_audio_path}")
+            logger.error(f"Temp directory contents: {os.listdir(os.path.dirname(temp_audio_path))}")
+            raise Exception("Audio file was not created")
+
+        audio_size = os.path.getsize(temp_audio_path)
+        logger.info(f"Audio file created successfully, size: {audio_size} bytes")
+
+        if audio_size == 0:
+            logger.error("Audio file is empty (0 bytes)")
+            raise Exception("Audio file is empty")
 
         # Read the audio file and encode as base64
+        logger.info("Reading audio file and encoding to base64...")
         with open(temp_audio_path, 'rb') as audio_file:
             audio_bytes = audio_file.read()
             audio_base64 = base64.b64encode(audio_bytes).decode('utf-8')
 
         logger.info(f"Audio file size: {len(audio_bytes)} bytes, base64 size: {len(audio_base64)} chars")
+        logger.info("Audio extraction completed successfully")
 
         return JSONResponse(content={
             "status": "success",
@@ -130,22 +246,28 @@ async def extract_audio(video_file: UploadFile = File(...)):
             "message": "Audio extracted successfully"
         })
 
-    except subprocess.TimeoutExpired:
-        logger.error("ffmpeg timeout after 5 minutes")
+    except subprocess.TimeoutExpired as e:
+        logger.error(f"ffmpeg timeout: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail="Audio extraction timed out after 5 minutes")
+    except HTTPException:
+        raise  # Re-raise HTTP exceptions as-is
     except Exception as e:
         logger.error(f"Error extracting audio: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Audio extraction failed: {str(e)}")
 
     finally:
         # Clean up temporary files
+        logger.info("Starting cleanup of temporary files")
         for path in [temp_video_path, temp_audio_path]:
             if path and os.path.exists(path):
                 try:
+                    file_size = os.path.getsize(path)
                     os.unlink(path)
-                    logger.info(f"Cleaned up temp file: {path}")
+                    logger.info(f"Cleaned up temp file: {path} ({file_size} bytes)")
                 except Exception as cleanup_error:
                     logger.warning(f"Failed to cleanup {path}: {cleanup_error}")
+            elif path:
+                logger.warning(f"Temp file does not exist for cleanup: {path}")
 
 
 @app.post("/download-extract-audio/")

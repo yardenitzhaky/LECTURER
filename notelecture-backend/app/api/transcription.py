@@ -110,9 +110,12 @@ async def transcribe_lecture(
             suffix = Path(original_video_filename).suffix
             with tempfile.NamedTemporaryFile(delete=False, suffix=suffix, dir='/tmp') as tmp_file:
                 video_content = await video.read()
-                tmp_file.write(video_content)
+                logger.info(f"Read {len(video_content)} bytes from uploaded video")
+                bytes_written = tmp_file.write(video_content)
+                tmp_file.flush()
+                os.fsync(tmp_file.fileno())
                 video_path_str = tmp_file.name
-            logger.info(f"Saved uploaded video to temp file: {video_path_str}")
+            logger.info(f"Saved uploaded video to temp file: {video_path_str} ({bytes_written} bytes written)")
         else:
             video_path_str = video_url
             logger.info(f"Using video URL: {video_path_str[:100]}...")
@@ -169,9 +172,21 @@ async def transcribe_lecture(
                 # If video URL, just send the URL
                 if video:
                     # Re-read the video file and send to Cloud Run
+                    logger.info(f"Reading video file from: {video_path_str}")
+                    if not os.path.exists(video_path_str):
+                        logger.error(f"Video file does not exist: {video_path_str}")
+                        raise HTTPException(status_code=500, detail="Video file not found")
+
+                    video_file_size = os.path.getsize(video_path_str)
+                    logger.info(f"Video file size on disk: {video_file_size} bytes")
+
+                    # Read entire file into memory to ensure complete upload
                     with open(video_path_str, 'rb') as video_file:
+                        video_bytes = video_file.read()
+                        logger.info(f"Read {len(video_bytes)} bytes from video file")
+
                         files = {
-                            "video_file": (original_video_filename, video_file, "video/mp4")
+                            "video_file": (original_video_filename, video_bytes, "video/mp4")
                         }
                         response = await client.post(
                             f"{settings.EXTERNAL_SERVICE_URL}/process-lecture-complete/",
@@ -195,6 +210,14 @@ async def transcribe_lecture(
             update_lecture_status(db, lecture_id, "failed")
             db.commit()
             raise HTTPException(status_code=500, detail=f"Failed to start processing: {str(ext_err)}")
+        finally:
+            # Clean up temp video file if it was created
+            if video and video_path_str and os.path.exists(video_path_str):
+                try:
+                    os.unlink(video_path_str)
+                    logger.info(f"Cleaned up temp video file: {video_path_str}")
+                except Exception as cleanup_err:
+                    logger.warning(f"Failed to cleanup temp video file {video_path_str}: {cleanup_err}")
 
         return {"message": "Processing started", "lecture_id": lecture_id}
 
