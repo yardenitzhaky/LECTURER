@@ -90,14 +90,38 @@ async def extract_audio(video_file: UploadFile = File(...)):
 
         # Extract audio using moviepy
         logger.info("Starting audio extraction with moviepy...")
-        video = VideoFileClip(temp_video_path)
+        video = VideoFileClip(temp_video_path, audio_fps=44100, verbose=False)
 
         if video.audio is None:
             video.close()
             raise ValueError("No audio track found in video file")
 
-        # Extract audio to MP3
-        video.audio.write_audiofile(temp_audio_path, codec='libmp3lame', logger=None, verbose=False)
+        # Extract audio to MP3 with minimal logging to prevent hanging
+        logger.info("Writing audio file...")
+        import sys
+        import io
+
+        # Redirect stdout/stderr to prevent moviepy progress bars from hanging
+        old_stdout = sys.stdout
+        old_stderr = sys.stderr
+        sys.stdout = io.StringIO()
+        sys.stderr = io.StringIO()
+
+        try:
+            video.audio.write_audiofile(
+                temp_audio_path,
+                codec='libmp3lame',
+                bitrate='128k',
+                fps=44100,
+                nbytes=2,
+                buffersize=2000,
+                logger=None,
+                verbose=False
+            )
+        finally:
+            sys.stdout = old_stdout
+            sys.stderr = old_stderr
+
         video.close()
         logger.info(f"Audio extracted to: {temp_audio_path}")
 
