@@ -47,6 +47,7 @@ class Settings(BaseSettings):
     # External service configuration
     EXTERNAL_SERVICE_URL: str = ""
     EXTERNAL_SERVICE_API_KEY: str = ""
+    BACKEND_URL: Optional[str] = None  # Main backend URL for callbacks
 
     @field_validator('BACKEND_CORS_ORIGINS', mode='before')
     @classmethod

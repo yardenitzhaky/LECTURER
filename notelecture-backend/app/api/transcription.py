@@ -3,6 +3,7 @@ import uuid
 import logging
 import tempfile
 import os
+import json
 from pathlib import Path
 from typing import Dict, Any, Optional
 
@@ -137,12 +138,42 @@ async def transcribe_lecture(
             update_lecture_status(db, lecture_id, "failed")
             raise HTTPException(status_code=500, detail=f"Error processing presentation: {pres_err}") from pres_err
 
-        # Enqueue background task
-        background_tasks.add_task(process_video_background, video_path_or_url=video_path_str, lecture_id=lecture_id, db_session_factory=SessionLocal)
+        # Instead of background task, call external Cloud Run service
         update_lecture_status(db, lecture_id, "processing")
-        
-        # Final commit for lecture and processing status
         db.commit()
+
+        # Trigger processing on external Cloud Run service
+        try:
+            import httpx
+
+            # Prepare slides data for external service
+            slides_list = [
+                {"index": slide.index, "image_data": slide.image_data}
+                for slide in db.query(Slide).filter(Slide.lecture_id == lecture_id).order_by(Slide.index).all()
+            ]
+
+            # Get backend URL from settings
+            backend_url = settings.BACKEND_URL or "https://notelecture-backend.vercel.app"
+
+            # Call external service asynchronously (fire and forget)
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                await client.post(
+                    f"{settings.EXTERNAL_SERVICE_URL}/process-lecture-complete/",
+                    data={
+                        "lecture_id": lecture_id,
+                        "video_path": video_path_str,
+                        "slides_data": json.dumps(slides_list),
+                        "backend_url": backend_url,
+                        "api_key": settings.EXTERNAL_SERVICE_API_KEY or ""
+                    }
+                )
+
+            logger.info(f"Triggered external processing for lecture {lecture_id}")
+
+        except Exception as ext_err:
+            logger.error(f"Failed to trigger external processing: {ext_err}")
+            # Don't fail the request - just log the error
+            # The lecture will remain in "processing" status
 
         return {"message": "Processing started", "lecture_id": lecture_id}
 
